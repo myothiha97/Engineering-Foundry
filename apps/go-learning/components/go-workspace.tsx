@@ -4,20 +4,27 @@ import {
   Bookmark,
   Check,
   ChevronRight,
-  CircleDot,
   Clock3,
   Focus,
   Lightbulb,
   ListTree,
   Menu,
-  TerminalSquare,
   X,
 } from "lucide-react";
 import { GoEditor } from "@platform/code-editor";
 import { FlowDiagram, type DiagramNode } from "@platform/diagrams";
 import { LearningProvider, useLearning } from "@platform/learning-engine/react";
 import { normalizeStage, type Lesson } from "@platform/content-schema";
-import { Badge, Button, ProgressRing, ReferenceList, SectionLabel, StageArticle } from "@platform/ui";
+import {
+  Badge,
+  Button,
+  ProgressRing,
+  ReferenceList,
+  ResourceList,
+  SectionLabel,
+  StageArticle,
+} from "@platform/ui";
+import { allTopics, goCurriculum, type CurriculumModule, type TopicRef } from "@platform/curriculum";
 
 const stageMeta = [
   ["problem", "01", "The problem"],
@@ -69,6 +76,20 @@ const progressLabels: Record<string, string> = {
   mastered: "Mastered",
 };
 
+const statusTag: Record<string, string> = {
+  authored: "ready",
+  in_authoring: "drafting",
+  planned: "planned",
+};
+const statusLabel: Record<string, string> = {
+  authored: "Ready to learn",
+  in_authoring: "In authoring",
+  planned: "Planned",
+};
+
+// Flat topic index (topic + module context) for lookups — pure over static catalog data.
+const topicIndex = new Map<string, TopicRef>(allTopics(goCurriculum).map((t) => [t.id, t]));
+
 export function GoWorkspace(props: { lesson: Lesson; moduleTitle: string }) {
   return (
     <LearningProvider storageKey="go-runtime-lab">
@@ -77,7 +98,7 @@ export function GoWorkspace(props: { lesson: Lesson; moduleTitle: string }) {
   );
 }
 
-function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: string }) {
+function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   const {
     progress,
     stages,
@@ -93,21 +114,14 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
     masteryScoreFor,
   } = useLearning();
 
-  // Only render stages that have authored content or an interactive widget — empty
-  // prose stages (e.g. an unauthored mental-model / failure-cases) are skipped so the
-  // continuous page never shows a bare heading. Data-driven: authored content appears
-  // automatically.
-  const renderedStages = useMemo(
-    () =>
-      stageMeta.filter(([id]) => {
-        if (widgetStages.has(id)) return true;
-        const c = normalizeStage(lesson.sections[id]);
-        return Boolean(c.body?.trim() || c.blocks?.length || c.example || c.scenario || c.keyPoints?.length);
-      }),
-    [lesson],
-  );
+  // The catalog topic that maps to the one authored lesson — the default selection.
+  const lessonTopicId = useMemo(() => {
+    for (const m of goCurriculum.modules) for (const t of m.topics) if (t.lessonId === lesson.id) return t.id;
+    return goCurriculum.modules[0]?.topics[0]?.id ?? "";
+  }, [lesson.id]);
 
-  const [activeStage, setActiveStage] = useState<StageId>(renderedStages[0]?.[0] ?? "problem");
+  const [selectedTopicId, setSelectedTopicId] = useState(lessonTopicId);
+  const [activeStage, setActiveStage] = useState<StageId>("problem");
   const [inspectorNode, setInspectorNode] = useState(pipeline[0]!);
   const [focus, setFocus] = useState(false);
   const [prediction, setPrediction] = useState<string>();
@@ -117,6 +131,22 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
   const sectionRefs = useRef(new Map<StageId, HTMLElement>());
   const restored = useRef(false);
   const firedRef = useRef(new Set<string>());
+
+  const selectedTopic = topicIndex.get(selectedTopicId);
+  const selectedModule = goCurriculum.modules.find((m) => m.id === selectedTopic?.moduleId);
+  const isLessonView = Boolean(selectedTopic?.lessonId && selectedTopic.lessonId === lesson.id);
+
+  // Only render stages that have authored content or an interactive widget — empty prose
+  // stages are skipped so the continuous page never shows a bare heading (data-driven).
+  const renderedStages = useMemo(
+    () =>
+      stageMeta.filter(([id]) => {
+        if (widgetStages.has(id)) return true;
+        const c = normalizeStage(lesson.sections[id]);
+        return Boolean(c.body?.trim() || c.blocks?.length || c.example || c.scenario || c.keyPoints?.length);
+      }),
+    [lesson],
+  );
 
   const state = progress[lesson.id] ?? "not_started";
   const evidence = getEvidence(lesson.id);
@@ -135,24 +165,25 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
 
   // Restore the last-viewed section on reload by scrolling to it.
   useEffect(() => {
-    if (!hydrated || restored.current) return;
+    if (!hydrated || restored.current || !isLessonView) return;
     restored.current = true;
     const saved = stages[lesson.id];
     if (saved && renderedStages.some(([id]) => id === saved)) {
       setActiveStage(saved as StageId);
       requestAnimationFrame(() => sectionRefs.current.get(saved as StageId)?.scrollIntoView({ block: "start" }));
     }
-  }, [hydrated, stages, lesson.id, renderedStages]);
+  }, [hydrated, stages, lesson.id, renderedStages, isLessonView]);
 
   // Persist the active section as the learner scrolls (the engine debounces the write).
   useEffect(() => {
-    if (hydrated) setStage(lesson.id, activeStage);
+    if (hydrated && isLessonView) setStage(lesson.id, activeStage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStage, hydrated, lesson.id]);
+  }, [activeStage, hydrated, lesson.id, isLessonView]);
 
   // Evidence re-homed from the old "Continue" button onto scroll depth: reaching the
-  // runtime-trace section attests the mental model; reaching the summary attests review.
+  // mental-model section attests the model; reaching the summary attests review.
   useEffect(() => {
+    if (!isLessonView) return;
     const mentalIdx = renderedStages.findIndex(([id]) => id === "mental-model");
     const anchorMental = mentalIdx >= 0 ? mentalIdx : renderedStages.findIndex(([id]) => id === "diagram");
     const anchorSummary = renderedStages.findIndex(([id]) => id === "summary");
@@ -167,10 +198,12 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
       applyEvent(lesson.id, { type: "REVIEW_EXPLANATION" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndex, renderedStages, lesson.id]);
+  }, [activeIndex, renderedStages, lesson.id, isLessonView]);
 
-  // Scroll-spy: highlight the section closest to the top of the viewport.
+  // Scroll-spy: highlight the section closest to the top of the viewport. Re-runs when the
+  // view flips so it re-observes freshly mounted section nodes.
   useEffect(() => {
+    if (!isLessonView) return;
     const visible = new Map<string, number>();
     const observer = new IntersectionObserver(
       (entries) => {
@@ -197,7 +230,18 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
     );
     sectionRefs.current.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [renderedStages]);
+  }, [renderedStages, isLessonView]);
+
+  // Scroll back to the top of the column whenever the selected topic changes.
+  useEffect(() => {
+    document.getElementById("lesson-content")?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
+  }, [selectedTopicId]);
+
+  const selectTopic = (id: string) => {
+    setSelectedTopicId(id);
+    setPanel(null);
+  };
 
   const scrollToStage = (id: StageId) => {
     setActiveStage(id);
@@ -384,6 +428,78 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
     return null;
   };
 
+  /** Inspectable catalog preview for a topic that has no authored lesson yet. */
+  const renderPreview = (topic: TopicRef, module?: CurriculumModule) => {
+    const resources = topic.resources ?? module?.resources ?? [];
+    const prereqs = topic.prerequisites.map((id) => topicIndex.get(id)).filter((t): t is TopicRef => Boolean(t));
+    return (
+      <>
+        <div className="lesson-head">
+          <div>
+            <div className="breadcrumbs">
+              <span>{module ? `MODULE ${String(module.order).padStart(2, "0")}` : "GO"}</span>
+              <ChevronRight size={12} />
+              <span>PREVIEW</span>
+            </div>
+            <h1>{topic.title}</h1>
+            <p>{topic.summary}</p>
+            <div className="lesson-meta">
+              <Badge className={`state-badge state-${topic.status}`}>{statusLabel[topic.status]}</Badge>
+              <Badge>{topic.concepts.length} concepts</Badge>
+              {topic.prerequisites.length > 0 && <Badge>{topic.prerequisites.length} prerequisites</Badge>}
+            </div>
+          </div>
+        </div>
+
+        <div className="topic-preview">
+          <section className="preview-block" id="preview-why">
+            <SectionLabel>Why learn this now</SectionLabel>
+            <p>{topic.whyNow}</p>
+          </section>
+          <section className="preview-block" id="preview-outcome">
+            <SectionLabel>What you’ll be able to do</SectionLabel>
+            <p>{topic.learnerOutcome}</p>
+          </section>
+          <section className="preview-block" id="preview-concepts">
+            <SectionLabel>Concepts you’ll build</SectionLabel>
+            <ul className="concept-chips">
+              {topic.concepts.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </section>
+          {prereqs.length > 0 && (
+            <section className="preview-block" id="preview-prereqs">
+              <SectionLabel>Grounded in</SectionLabel>
+              <ul className="prereq-list">
+                {prereqs.map((p) => (
+                  <li key={p.id}>
+                    <button className="prereq-link" onClick={() => selectTopic(p.id)}>
+                      {p.title}
+                    </button>
+                    <small>{p.moduleTitle}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <section className="preview-block" id="preview-ledgerflow">
+            <SectionLabel>Applied to LedgerFlow</SectionLabel>
+            <p>{topic.ledgerFlowApplication}</p>
+          </section>
+          {resources.length > 0 && (
+            <section className="preview-block" id="preview-resources">
+              <ResourceList items={resources} title="Resources" />
+            </section>
+          )}
+          <p className="preview-foot">
+            This topic is planned — freely inspectable, but not yet masterable. Content is on the way.
+          </p>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div className={focus ? "go-app focus-mode" : "go-app"} data-panel={panel ?? undefined}>
       <a className="skip-link" href="#lesson-content">
@@ -416,7 +532,7 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
         </div>
       </header>
 
-      {/* LEFT — course/module curriculum */}
+      {/* LEFT — full course catalog: every module and topic, freely explorable */}
       <aside className="curriculum" aria-label="Curriculum" id="curriculum-panel">
         <div className="panel-close-row">
           <SectionLabel>Guided curriculum</SectionLabel>
@@ -428,135 +544,163 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
           <ProgressRing value={score} label="Evidence score" />
           <p className="ring-caption">Mastery evidence collected</p>
         </div>
-        <p className="module-kicker">Module 00</p>
-        <h2>{moduleTitle}</h2>
-        <div className="lesson-row active">
-          <span className="lesson-status">
-            <CircleDot size={15} />
-          </span>
-          <div>
-            <strong>{lesson.title}</strong>
-            <small>
-              16 stages · {lesson.estimatedMinutes} min · {progressLabels[state]}
-            </small>
-          </div>
-        </div>
-        <div className="module-list">
-          <p>
-            <span>01</span> Values &amp; execution <em>planned</em>
-          </p>
-          <p>
-            <span>02</span> Memory &amp; data <em>planned</em>
-          </p>
-          <p>
-            <span>03</span> Types &amp; abstraction <em>planned</em>
-          </p>
-        </div>
-        <div className="project-link">
-          <TerminalSquare size={18} />
-          <div>
-            <small>Module project</small>
-            <strong>Execution inspector</strong>
-          </div>
-          <span>0/4</span>
-        </div>
+        <nav className="module-tree" aria-label="Course modules">
+          {goCurriculum.modules.map((module) => (
+            <div className="module-group" key={module.id}>
+              <div className="module-group-head">
+                <span className="module-index">{String(module.order).padStart(2, "0")}</span>
+                <div>
+                  <strong>{module.title}</strong>
+                  <small>
+                    {module.level} · {module.topics.length} topics
+                  </small>
+                </div>
+              </div>
+              <div className="module-topics">
+                {module.topics.map((topic) => {
+                  const active = topic.id === selectedTopicId;
+                  return (
+                    <button
+                      key={topic.id}
+                      className={active ? "topic-row active" : "topic-row"}
+                      data-status={topic.status}
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => selectTopic(topic.id)}
+                    >
+                      <span className="topic-dot" aria-hidden />
+                      <span className="topic-title">{topic.title}</span>
+                      {topic.status !== "authored" && <em className="topic-tag">{statusTag[topic.status]}</em>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
       </aside>
 
-      {/* CENTER — one continuous, scroll-spied page of all stages */}
+      {/* CENTER — the authored lesson (stacked, scroll-spied) or a topic preview */}
       <main id="lesson-content" className="concept-workspace">
-        <div className="reading-progress" aria-hidden>
-          <i style={{ width: `${((Math.max(activeIndex, 0) + 1) / renderedStages.length) * 100}%` }} />
-        </div>
-        <div className="lesson-head">
-          <div>
-            <div className="breadcrumbs">
-              <span>GO.00</span>
-              <ChevronRight size={12} />
-              <span>FOUNDATION</span>
+        {isLessonView ? (
+          <>
+            <div className="reading-progress" aria-hidden>
+              <i style={{ width: `${((Math.max(activeIndex, 0) + 1) / renderedStages.length) * 100}%` }} />
             </div>
-            <h1>{lesson.title}</h1>
-            <p>{lesson.description}</p>
-            <div className="lesson-meta">
-              <Badge>
-                <Clock3 size={11} /> {lesson.estimatedMinutes} min
-              </Badge>
-              <Badge>{lesson.difficulty}</Badge>
-              <Badge>{lesson.concepts.length} concepts</Badge>
-              <Badge className={`state-badge state-${state}`}>{progressLabels[state]}</Badge>
+            <div className="lesson-head">
+              <div>
+                <div className="breadcrumbs">
+                  <span>GO.00</span>
+                  <ChevronRight size={12} />
+                  <span>FOUNDATION</span>
+                </div>
+                <h1>{lesson.title}</h1>
+                <p>{lesson.description}</p>
+                <div className="lesson-meta">
+                  <Badge>
+                    <Clock3 size={11} /> {lesson.estimatedMinutes} min
+                  </Badge>
+                  <Badge>{lesson.difficulty}</Badge>
+                  <Badge>{lesson.concepts.length} concepts</Badge>
+                  <Badge className={`state-badge state-${state}`}>{progressLabels[state]}</Badge>
+                </div>
+              </div>
+              <div className="lesson-actions">
+                <button
+                  aria-label="Bookmark lesson"
+                  aria-pressed={bookmarks.includes(lesson.id)}
+                  className={bookmarks.includes(lesson.id) ? "active" : ""}
+                  onClick={() => toggleBookmark(lesson.id)}
+                >
+                  <Bookmark size={16} />
+                </button>
+                <Button onClick={() => setFocus(true)}>
+                  <Focus size={15} /> Focus
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="lesson-actions">
-            <button
-              aria-label="Bookmark lesson"
-              aria-pressed={bookmarks.includes(lesson.id)}
-              className={bookmarks.includes(lesson.id) ? "active" : ""}
-              onClick={() => toggleBookmark(lesson.id)}
-            >
-              <Bookmark size={16} />
-            </button>
-            <Button onClick={() => setFocus(true)}>
-              <Focus size={15} /> Focus
-            </Button>
-          </div>
-        </div>
 
-        {renderedStages.map(([id, number, label]) => (
-          <section
-            key={id}
-            id={`stage-${id}`}
-            data-stage={id}
-            ref={registerSection(id)}
-            className="stage-content"
-            aria-labelledby={`stage-${id}-heading`}
-          >
-            <div className="stage-number" aria-hidden>
-              {number}
-            </div>
-            <SectionLabel>{label}</SectionLabel>
-            <h2 id={`stage-${id}-heading`}>{label}</h2>
+            {renderedStages.map(([id, number, label]) => (
+              <section
+                key={id}
+                id={`stage-${id}`}
+                data-stage={id}
+                ref={registerSection(id)}
+                className="stage-content"
+                aria-labelledby={`stage-${id}-heading`}
+              >
+                <div className="stage-number" aria-hidden>
+                  {number}
+                </div>
+                <SectionLabel>{label}</SectionLabel>
+                <h2 id={`stage-${id}-heading`}>{label}</h2>
 
-            <StageArticle content={normalizeStage(lesson.sections[id])} />
+                <StageArticle content={normalizeStage(lesson.sections[id])} />
 
-            {renderWidget(id)}
-          </section>
-        ))}
+                {renderWidget(id)}
+              </section>
+            ))}
 
-        {/* page-level extras pinned to the very bottom of the page */}
-        <section className="page-extras">
-          <div className="page-note">
-            <SectionLabel>Your note</SectionLabel>
-            <textarea
-              aria-label="Lesson note"
-              value={notes[lesson.id] ?? ""}
-              onChange={(e) => setNote(lesson.id, e.target.value)}
-              placeholder="Capture a question or invariant…"
-            />
-          </div>
-          <ReferenceList items={lesson.references} />
-        </section>
+            {/* page-level extras pinned to the very bottom of the page */}
+            <section className="page-extras">
+              <div className="page-note">
+                <SectionLabel>Your note</SectionLabel>
+                <textarea
+                  aria-label="Lesson note"
+                  value={notes[lesson.id] ?? ""}
+                  onChange={(e) => setNote(lesson.id, e.target.value)}
+                  placeholder="Capture a question or invariant…"
+                />
+              </div>
+              <ReferenceList items={lesson.references} />
+            </section>
+          </>
+        ) : selectedTopic ? (
+          renderPreview(selectedTopic, selectedModule)
+        ) : null}
       </main>
 
-      {/* RIGHT — table of contents (outline) driven by scroll position */}
+      {/* RIGHT — stage outline (lesson) or topic context (preview) */}
       <aside className="page-toc-panel" id="toc-panel" aria-label="Table of contents">
         <div className="panel-close-row">
-          <SectionLabel>On this page</SectionLabel>
+          <SectionLabel>{isLessonView ? "On this page" : "About this topic"}</SectionLabel>
           <button className="panel-close" aria-label="Close contents" onClick={() => setPanel(null)}>
             <X size={16} />
           </button>
         </div>
-        <nav className="page-toc" aria-label="Lesson stages">
-          {renderedStages.map(([id, number, label]) => (
-            <button
-              key={id}
-              aria-current={activeStage === id ? "step" : undefined}
-              className={activeStage === id ? "active" : ""}
-              onClick={() => scrollToStage(id)}
-            >
-              <span className="toc-number">{number}</span>
-              <span className="toc-title">{label}</span>
-            </button>
-          ))}
-        </nav>
+        {isLessonView ? (
+          <nav className="page-toc" aria-label="Lesson stages">
+            {renderedStages.map(([id, number, label]) => (
+              <button
+                key={id}
+                aria-current={activeStage === id ? "step" : undefined}
+                className={activeStage === id ? "active" : ""}
+                onClick={() => scrollToStage(id)}
+              >
+                <span className="toc-number">{number}</span>
+                <span className="toc-title">{label}</span>
+              </button>
+            ))}
+          </nav>
+        ) : selectedTopic ? (
+          <div className="topic-aside">
+            <p className={`topic-aside-status state-${selectedTopic.status}`}>{statusLabel[selectedTopic.status]}</p>
+            {selectedTopic.prerequisites.length > 0 && (
+              <>
+                <SectionLabel>Prerequisites</SectionLabel>
+                <ul className="aside-prereqs">
+                  {selectedTopic.prerequisites
+                    .map((id) => topicIndex.get(id))
+                    .filter((t): t is TopicRef => Boolean(t))
+                    .map((p) => (
+                      <li key={p.id}>
+                        <button onClick={() => selectTopic(p.id)}>{p.title}</button>
+                      </li>
+                    ))}
+                </ul>
+              </>
+            )}
+          </div>
+        ) : null}
       </aside>
 
       {panel && <div className="panel-backdrop" onClick={() => setPanel(null)} aria-hidden />}
