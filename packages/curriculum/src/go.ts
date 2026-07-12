@@ -232,7 +232,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Slices are everywhere and their aliasing behavior causes real bugs.",
           learnerOutcome: "Predict when append reallocates and when slices share memory.",
           ledgerFlowApplication: "Batch transactions without aliasing corruption.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-slices",
         },
         {
           id: "go-maps",
@@ -243,7 +244,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Maps are the default associative structure; iteration order surprises many.",
           learnerOutcome: "Use maps correctly and avoid ordering assumptions.",
           ledgerFlowApplication: "Index accounts by id for O(1) lookup.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-maps",
         },
         {
           id: "go-strings-runes",
@@ -254,7 +256,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Text handling is a common source of correctness bugs.",
           learnerOutcome: "Iterate text safely by rune, not byte.",
           ledgerFlowApplication: "Normalize and validate user-entered descriptions.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-strings-runes",
         },
         {
           id: "go-structs-pointers",
@@ -265,7 +268,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Structs and pointers are how Go models domain data and behavior.",
           learnerOutcome: "Choose value vs pointer receivers deliberately.",
           ledgerFlowApplication: "Model accounts and transactions as structs.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-structs-pointers",
         },
         {
           id: "go-stack-heap-escape",
@@ -276,7 +280,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Knowing where values live explains performance and lifetime.",
           learnerOutcome: "Reason about allocation without premature tuning.",
           ledgerFlowApplication: "Keep hot request paths allocation-light.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-stack-heap-escape",
           resources: [
             {
               label: "A Guide to the Go Garbage Collector",

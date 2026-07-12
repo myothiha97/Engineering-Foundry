@@ -7,6 +7,14 @@ import {
   goControlFlow,
   goModule1,
 } from "./module-1";
+import {
+  goSlices,
+  goMaps,
+  goStringsRunes,
+  goStructsPointers,
+  goStackHeapEscape,
+  goModule2,
+} from "./module-2";
 
 /**
  * Every authored Go lesson, in curriculum order. The workspace opens any lesson
@@ -21,6 +29,11 @@ export const goLessons: Lesson[] = [
   goCopySemantics,
   goFunctionsDefer,
   goControlFlow,
+  goSlices,
+  goMaps,
+  goStringsRunes,
+  goStructsPointers,
+  goStackHeapEscape,
 ];
 
 export const goLessonsById: Record<string, Lesson> = Object.fromEntries(
@@ -28,4 +41,4 @@ export const goLessonsById: Record<string, Lesson> = Object.fromEntries(
 );
 
 /** Content-schema modules, used for referential validation of lessonIds. */
-export const goContentModules: CurriculumModule[] = [goModule0, goModule1];
+export const goContentModules: CurriculumModule[] = [goModule0, goModule1, goModule2];
