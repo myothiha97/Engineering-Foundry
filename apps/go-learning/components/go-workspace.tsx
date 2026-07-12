@@ -39,6 +39,16 @@ const stageMeta = [
 ] as const;
 type StageId = (typeof stageMeta)[number][0];
 
+/** Stages that always render because they carry an interactive widget, even with no prose. */
+const widgetStages = new Set<StageId>([
+  "diagram",
+  "experiment",
+  "implementation",
+  "exercises",
+  "mastery",
+  "summary",
+]);
+
 const pipeline: DiagramNode[] = [
   { id: "resolve", label: "resolve", detail: "Build the package dependency graph and select module versions.", x: 20, y: 90 },
   { id: "compile", label: "compile", detail: "Type-check packages and emit object data.", x: 175, y: 90 },
@@ -83,56 +93,295 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
     masteryScoreFor,
   } = useLearning();
 
-  const [stage, setStageLocal] = useState<StageId>("problem");
+  // Only render stages that have authored content or an interactive widget — empty
+  // prose stages (e.g. an unauthored mental-model / failure-cases) are skipped so the
+  // continuous page never shows a bare heading. Data-driven: authored content appears
+  // automatically.
+  const renderedStages = useMemo(
+    () =>
+      stageMeta.filter(([id]) => {
+        if (widgetStages.has(id)) return true;
+        const c = normalizeStage(lesson.sections[id]);
+        return Boolean(c.body?.trim() || c.blocks?.length || c.example || c.scenario || c.keyPoints?.length);
+      }),
+    [lesson],
+  );
+
+  const [activeStage, setActiveStage] = useState<StageId>(renderedStages[0]?.[0] ?? "problem");
   const [inspectorNode, setInspectorNode] = useState(pipeline[0]!);
   const [focus, setFocus] = useState(false);
   const [prediction, setPrediction] = useState<string>();
   const [revealed, setRevealed] = useState(false);
   const [panel, setPanel] = useState<"nav" | "toc" | null>(null);
 
+  const sectionRefs = useRef(new Map<StageId, HTMLElement>());
   const restored = useRef(false);
-  useEffect(() => {
-    if (!hydrated || restored.current) return;
-    restored.current = true;
-    const saved = stages[lesson.id];
-    if (saved && stageMeta.some(([id]) => id === saved)) setStageLocal(saved as StageId);
-  }, [hydrated, stages, lesson.id]);
+  const firedRef = useRef(new Set<string>());
 
   const state = progress[lesson.id] ?? "not_started";
   const evidence = getEvidence(lesson.id);
   const score = masteryScoreFor(lesson.id);
-  const currentIndex = stageMeta.findIndex(([id]) => id === stage);
-  const current = stageMeta[currentIndex]!;
-  const content = useMemo(() => normalizeStage(lesson.sections[stage]), [lesson, stage]);
+  const activeIndex = renderedStages.findIndex(([id]) => id === activeStage);
 
   const requiredCriteria = lesson.masteryCriteria.filter((c) => c.required);
   const requiredMet = requiredCriteria.every((c) => evidence.criteria[c.id]);
   const mastered = state === "mastered";
 
-  const goToStage = (id: StageId) => {
-    setStageLocal(id);
-    setStage(lesson.id, id);
-    applyEvent(lesson.id, { type: "OPEN" });
-    setPanel(null);
-  };
+  // Opening the lesson counts as engagement (not_started -> in_progress).
+  useEffect(() => {
+    if (hydrated) applyEvent(lesson.id, { type: "OPEN" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, lesson.id]);
 
-  const next = () => {
-    const leaving = stage;
-    const target = stageMeta[Math.min(currentIndex + 1, stageMeta.length - 1)]![0];
-    if (leaving === "mental-model") {
+  // Restore the last-viewed section on reload by scrolling to it.
+  useEffect(() => {
+    if (!hydrated || restored.current) return;
+    restored.current = true;
+    const saved = stages[lesson.id];
+    if (saved && renderedStages.some(([id]) => id === saved)) {
+      setActiveStage(saved as StageId);
+      requestAnimationFrame(() => sectionRefs.current.get(saved as StageId)?.scrollIntoView({ block: "start" }));
+    }
+  }, [hydrated, stages, lesson.id, renderedStages]);
+
+  // Persist the active section as the learner scrolls (the engine debounces the write).
+  useEffect(() => {
+    if (hydrated) setStage(lesson.id, activeStage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStage, hydrated, lesson.id]);
+
+  // Evidence re-homed from the old "Continue" button onto scroll depth: reaching the
+  // runtime-trace section attests the mental model; reaching the summary attests review.
+  useEffect(() => {
+    const mentalIdx = renderedStages.findIndex(([id]) => id === "mental-model");
+    const anchorMental = mentalIdx >= 0 ? mentalIdx : renderedStages.findIndex(([id]) => id === "diagram");
+    const anchorSummary = renderedStages.findIndex(([id]) => id === "summary");
+    if (anchorMental >= 0 && activeIndex >= anchorMental && !firedRef.current.has("mental-model")) {
+      firedRef.current.add("mental-model");
       recordEvidence(lesson.id, { mentalModel: true });
       applyEvent(lesson.id, { type: "CONFIRM_MENTAL_MODEL" });
     }
-    if (target === "summary") {
+    if (anchorSummary >= 0 && activeIndex >= anchorSummary && !firedRef.current.has("summary")) {
+      firedRef.current.add("summary");
       recordEvidence(lesson.id, { explanationReviewed: true });
       applyEvent(lesson.id, { type: "REVIEW_EXPLANATION" });
     }
-    goToStage(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex, renderedStages, lesson.id]);
+
+  // Scroll-spy: highlight the section closest to the top of the viewport.
+  useEffect(() => {
+    const visible = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.stage;
+          if (!id) continue;
+          if (entry.isIntersecting) visible.set(id, entry.boundingClientRect.top);
+          else visible.delete(id);
+        }
+        let bestId: string | undefined;
+        let bestTop = Infinity;
+        visible.forEach((top, id) => {
+          if (top < bestTop) {
+            bestTop = top;
+            bestId = id;
+          }
+        });
+        if (bestId) {
+          const next = bestId as StageId;
+          setActiveStage((prev) => (prev === next ? prev : next));
+        }
+      },
+      { root: null, rootMargin: "-64px 0px -55% 0px", threshold: [0, 0.25, 0.5, 1] },
+    );
+    sectionRefs.current.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [renderedStages]);
+
+  const scrollToStage = (id: StageId) => {
+    setActiveStage(id);
+    sectionRefs.current.get(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPanel(null);
   };
 
   const submitMastery = () => {
     recordEvidence(lesson.id, { explanationReviewed: true });
     applyEvent(lesson.id, { type: "VERIFY_MASTERY", passed: true });
+  };
+
+  const registerSection = (id: StageId) => (el: HTMLElement | null) => {
+    if (el) sectionRefs.current.set(id, el);
+    else sectionRefs.current.delete(id);
+  };
+
+  /** Interactive widget rendered inside a stage's section (below its prose). */
+  const renderWidget = (id: StageId) => {
+    if (id === "diagram") {
+      return (
+        <div className="diagram-shell">
+          <FlowDiagram nodes={pipeline} onSelect={setInspectorNode} />
+          <div className="diagram-legend">
+            <span>
+              <i className="source" />
+              build-time artifact
+            </span>
+            <span>
+              <i className="runtime" />
+              runtime state
+            </span>
+          </div>
+          <div className="diagram-inspector">
+            <div className="inspect-value">
+              <span>{inspectorNode.id}</span>
+              <strong>{inspectorNode.label}</strong>
+            </div>
+            <p>{inspectorNode.detail}</p>
+            <p className="invariant">
+              Invariant: every imported package is initialized exactly once before the package that imports it.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (id === "experiment") {
+      return (
+        <div className="experiment">
+          <div className="experiment-head">
+            <Lightbulb size={18} />
+            <div>
+              <strong>Commit before reveal</strong>
+              <small>Your first answer is the useful evidence.</small>
+            </div>
+          </div>
+          <p>Which runs first?</p>
+          <div className="prediction-grid" role="group" aria-label="Prediction options">
+            {["main package variable", "dependency init", "main.init", "main.main"].map((value) => (
+              <button
+                className={prediction === value ? "selected" : ""}
+                aria-pressed={prediction === value}
+                key={value}
+                onClick={() => setPrediction(value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+          <Button
+            disabled={!prediction}
+            onClick={() => {
+              setRevealed(true);
+              const correct = prediction === "dependency init";
+              recordEvidence(lesson.id, { predictionCorrect: correct });
+              applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct });
+            }}
+          >
+            Reveal execution trace
+          </Button>
+          {revealed && (
+            <div className={prediction === "dependency init" ? "reveal correct" : "reveal"} role="status">
+              <strong>{prediction === "dependency init" ? "Correct." : "Revise the model."}</strong>{" "}
+              Dependencies initialize before the importing package’s variables and init functions.
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (id === "implementation") {
+      return (
+        <GoEditor
+          starter={lesson.exercises.find((e) => e.type === "implementation")?.starterCode ?? ""}
+          expected={lesson.exercises.find((e) => e.type === "implementation")?.expectedAnswer ?? ""}
+          test={(code) => ({
+            passed: code.includes("runtime.Version()"),
+            output: code.includes("runtime.Version()")
+              ? "buildInfo reports the runtime version"
+              : "buildInfo must call runtime.Version()",
+          })}
+          onResult={(r) => {
+            if (r.passed) {
+              recordEvidence(lesson.id, { exercisePassed: true });
+              applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct: true });
+            }
+          }}
+        />
+      );
+    }
+
+    if (id === "exercises") {
+      return (
+        <div className="exercise-list">
+          {lesson.exercises.map((exercise, index) => (
+            <div className="exercise-row" key={exercise.id}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div>
+                <small>{exercise.type}</small>
+                <strong>{exercise.prompt}</strong>
+                {exercise.hints.length > 0 && <p className="exercise-hint">Hint: {exercise.hints[0]}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (id === "mastery") {
+      return (
+        <>
+          <p className="mastery-progress">
+            Evidence score <strong>{score}%</strong> ·{" "}
+            {requiredMet ? "ready to submit" : "attest each required criterion below"}
+          </p>
+          <div className="mastery-list">
+            {lesson.masteryCriteria.map((criterion) => (
+              <label key={criterion.id}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(evidence.criteria[criterion.id])}
+                  onChange={(e) => recordEvidence(lesson.id, { criteria: { [criterion.id]: e.target.checked } })}
+                />
+                <span>
+                  <small>
+                    {criterion.kind}
+                    {criterion.required ? " · required" : " · optional"}
+                  </small>
+                  {criterion.description}
+                </span>
+              </label>
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    if (id === "summary") {
+      return (
+        <div className={mastered ? "readiness mastered" : "readiness"}>
+          <Check size={22} />
+          <div>
+            <strong>
+              {mastered
+                ? "Lesson mastered."
+                : requiredMet
+                  ? "Evidence complete—submit to master."
+                  : "Explanation reviewed—not yet mastered."}
+            </strong>
+            <p>
+              {mastered
+                ? "Recorded locally. It will sync when you create an account."
+                : "Complete the required mastery criteria before mastery unlocks."}
+            </p>
+          </div>
+          <Button disabled={!requiredMet || mastered} onClick={submitMastery}>
+            {mastered ? "Mastered" : "Submit mastery evidence"}
+          </Button>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -213,7 +462,7 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
         </div>
       </aside>
 
-      {/* CENTER — the current page */}
+      {/* CENTER — one continuous, scroll-spied page of all stages */}
       <main id="lesson-content" className="concept-workspace">
         <div className="lesson-head">
           <div>
@@ -248,179 +497,26 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
           </div>
         </div>
 
-        <article className="stage-content">
-          <div className="stage-number" aria-hidden>
-            {current[1]}
-          </div>
-          <SectionLabel>{current[2]}</SectionLabel>
-          <h2>{stage === "mental-model" ? "Three clocks, one executable" : current[2]}</h2>
-
-          <StageArticle content={content} />
-
-          {stage === "diagram" && (
-            <div className="diagram-shell">
-              <FlowDiagram nodes={pipeline} onSelect={setInspectorNode} />
-              <div className="diagram-legend">
-                <span>
-                  <i className="source" />
-                  build-time artifact
-                </span>
-                <span>
-                  <i className="runtime" />
-                  runtime state
-                </span>
-              </div>
-              <div className="diagram-inspector">
-                <div className="inspect-value">
-                  <span>{inspectorNode.id}</span>
-                  <strong>{inspectorNode.label}</strong>
-                </div>
-                <p>{inspectorNode.detail}</p>
-                <p className="invariant">
-                  Invariant: every imported package is initialized exactly once before the package that imports it.
-                </p>
-              </div>
+        {renderedStages.map(([id, number, label]) => (
+          <section
+            key={id}
+            id={`stage-${id}`}
+            data-stage={id}
+            ref={registerSection(id)}
+            className="stage-content"
+            aria-labelledby={`stage-${id}-heading`}
+          >
+            <div className="stage-number" aria-hidden>
+              {number}
             </div>
-          )}
+            <SectionLabel>{label}</SectionLabel>
+            <h2 id={`stage-${id}-heading`}>{label}</h2>
 
-          {stage === "experiment" && (
-            <div className="experiment">
-              <div className="experiment-head">
-                <Lightbulb size={18} />
-                <div>
-                  <strong>Commit before reveal</strong>
-                  <small>Your first answer is the useful evidence.</small>
-                </div>
-              </div>
-              <p>Which runs first?</p>
-              <div className="prediction-grid" role="group" aria-label="Prediction options">
-                {["main package variable", "dependency init", "main.init", "main.main"].map((value) => (
-                  <button
-                    className={prediction === value ? "selected" : ""}
-                    aria-pressed={prediction === value}
-                    key={value}
-                    onClick={() => setPrediction(value)}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-              <Button
-                disabled={!prediction}
-                onClick={() => {
-                  setRevealed(true);
-                  const correct = prediction === "dependency init";
-                  recordEvidence(lesson.id, { predictionCorrect: correct });
-                  applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct });
-                }}
-              >
-                Reveal execution trace
-              </Button>
-              {revealed && (
-                <div className={prediction === "dependency init" ? "reveal correct" : "reveal"} role="status">
-                  <strong>{prediction === "dependency init" ? "Correct." : "Revise the model."}</strong>{" "}
-                  Dependencies initialize before the importing package’s variables and init functions.
-                </div>
-              )}
-            </div>
-          )}
+            <StageArticle content={normalizeStage(lesson.sections[id])} />
 
-          {stage === "implementation" && (
-            <GoEditor
-              starter={lesson.exercises.find((e) => e.type === "implementation")?.starterCode ?? ""}
-              expected={lesson.exercises.find((e) => e.type === "implementation")?.expectedAnswer ?? ""}
-              test={(code) => ({
-                passed: code.includes("runtime.Version()"),
-                output: code.includes("runtime.Version()")
-                  ? "buildInfo reports the runtime version"
-                  : "buildInfo must call runtime.Version()",
-              })}
-              onResult={(r) => {
-                if (r.passed) {
-                  recordEvidence(lesson.id, { exercisePassed: true });
-                  applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct: true });
-                }
-              }}
-            />
-          )}
-
-          {stage === "exercises" && (
-            <div className="exercise-list">
-              {lesson.exercises.map((exercise, index) => (
-                <div className="exercise-row" key={exercise.id}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <div>
-                    <small>{exercise.type}</small>
-                    <strong>{exercise.prompt}</strong>
-                    {exercise.hints.length > 0 && <p className="exercise-hint">Hint: {exercise.hints[0]}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {stage === "mastery" && (
-            <>
-              <p className="mastery-progress">
-                Evidence score <strong>{score}%</strong> ·{" "}
-                {requiredMet ? "ready to submit" : "attest each required criterion below"}
-              </p>
-              <div className="mastery-list">
-                {lesson.masteryCriteria.map((criterion) => (
-                  <label key={criterion.id}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(evidence.criteria[criterion.id])}
-                      onChange={(e) => recordEvidence(lesson.id, { criteria: { [criterion.id]: e.target.checked } })}
-                    />
-                    <span>
-                      <small>
-                        {criterion.kind}
-                        {criterion.required ? " · required" : " · optional"}
-                      </small>
-                      {criterion.description}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
-
-          {stage === "summary" && (
-            <div className={mastered ? "readiness mastered" : "readiness"}>
-              <Check size={22} />
-              <div>
-                <strong>
-                  {mastered
-                    ? "Lesson mastered."
-                    : requiredMet
-                      ? "Evidence complete—submit to master."
-                      : "Explanation reviewed—not yet mastered."}
-                </strong>
-                <p>
-                  {mastered
-                    ? "Recorded locally. It will sync when you create an account."
-                    : "Complete the required mastery criteria before mastery unlocks."}
-                </p>
-              </div>
-              <Button disabled={!requiredMet || mastered} onClick={submitMastery}>
-                {mastered ? "Mastered" : "Submit mastery evidence"}
-              </Button>
-            </div>
-          )}
-
-          <footer className="stage-footer">
-            <span>
-              {currentIndex + 1} of {stageMeta.length}
-            </span>
-            <div className="stage-progress" aria-hidden>
-              <i style={{ width: `${((currentIndex + 1) / stageMeta.length) * 100}%` }} />
-            </div>
-            <Button onClick={next} disabled={currentIndex === stageMeta.length - 1}>
-              Continue <ChevronRight size={15} />
-            </Button>
-          </footer>
-        </article>
+            {renderWidget(id)}
+          </section>
+        ))}
 
         {/* page-level extras pinned to the very bottom of the page */}
         <section className="page-extras">
@@ -437,7 +533,7 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
         </section>
       </main>
 
-      {/* RIGHT — table of contents (outline) for the current page */}
+      {/* RIGHT — table of contents (outline) driven by scroll position */}
       <aside className="page-toc-panel" id="toc-panel" aria-label="Table of contents">
         <div className="panel-close-row">
           <SectionLabel>On this page</SectionLabel>
@@ -446,12 +542,12 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
           </button>
         </div>
         <nav className="page-toc" aria-label="Lesson stages">
-          {stageMeta.map(([id, number, label]) => (
+          {renderedStages.map(([id, number, label]) => (
             <button
               key={id}
-              aria-current={stage === id ? "step" : undefined}
-              className={stage === id ? "active" : ""}
-              onClick={() => goToStage(id)}
+              aria-current={activeStage === id ? "step" : undefined}
+              className={activeStage === id ? "active" : ""}
+              onClick={() => scrollToStage(id)}
             >
               <span className="toc-number">{number}</span>
               <span className="toc-title">{label}</span>

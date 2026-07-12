@@ -338,13 +338,16 @@ a {
   gap: 6px;
 }
 
-/* center content — a centered, readable column */
+/* center content — stacked, scroll-spied sections in one readable column */
 .stage-content {
   position: relative;
   max-width: 860px;
   margin: 0 auto;
-  padding: 30px 3vw 40px;
-  animation: stage-in 0.3s ease;
+  padding: 44px 3vw 48px;
+  scroll-margin-top: 1.5rem;
+}
+.stage-content + .stage-content {
+  border-top: 1px solid var(--line);
 }
 
 /* page-level extras pinned to the very bottom of the page */
