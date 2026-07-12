@@ -426,7 +426,7 @@ a {
   align-items: start;
   gap: 8px;
 }
-.lesson-actions > button {
+.lesson-actions > button:not(.ui-button) {
   display: grid;
   place-items: center;
   width: 40px;
@@ -442,7 +442,12 @@ a {
 .lesson-actions .ui-button {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  width: auto;
+  min-width: 92px;
+  height: 40px;
+  padding: 0 14px;
 }
 
 /* center content — stacked, scroll-spied sections in one readable column */
@@ -1502,16 +1507,40 @@ a {
 
 /* ---------- focus mode ---------- */
 .focus-mode {
-  grid-template-columns: 0 minmax(0, 1fr) 300px;
+  grid-template-columns: 0 minmax(0, 1fr) 0;
 }
-.focus-mode .curriculum {
+.focus-mode .curriculum,
+.focus-mode .page-toc-panel {
   display: none;
 }
-.focus-mode .switch-app {
-  visibility: hidden;
+.focus-mode .concept-workspace {
+  grid-column: 2;
 }
-.focus-mode .lesson-head {
+.focus-mode .go-brand,
+.focus-mode .search-trigger,
+.focus-mode .toc-trigger,
+.focus-mode .nav-trigger,
+.focus-mode .switch-app,
+.focus-mode .avatar {
   display: none;
+}
+.focus-mode .go-topbar {
+  justify-content: flex-end;
+}
+.focus-mode .focus-toggle {
+  display: flex;
+  width: auto;
+  gap: 7px;
+  padding: 0 12px;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.focus-toggle-label {
+  display: none;
+  font-size: 0.82rem;
+}
+.focus-mode .focus-toggle-label {
+  display: inline;
 }
 
 /* ---------- panel triggers (mobile drawers) ---------- */

@@ -590,6 +590,9 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+      } else if (e.key === "Escape") {
+        setFocus(false);
+        setPanel(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -947,8 +950,17 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             <span>Search</span>
             <kbd>⌘K</kbd>
           </button>
-          <button aria-label="Toggle focus mode" aria-pressed={focus} onClick={() => setFocus((v) => !v)}>
+          <button
+            className="focus-toggle"
+            aria-label={focus ? "Exit focus mode" : "Enter focus mode"}
+            aria-pressed={focus}
+            onClick={() => {
+              setFocus((v) => !v);
+              setPanel(null);
+            }}
+          >
             <Focus size={17} />
+            <span className="focus-toggle-label">Exit focus</span>
           </button>
           <button className="panel-trigger toc-trigger" aria-label="Open contents" onClick={() => setPanel("toc")}>
             <ListTree size={17} />
@@ -1052,8 +1064,8 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
                 >
                   <Bookmark size={16} />
                 </button>
-                <Button onClick={() => setFocus(true)}>
-                  <Focus size={15} /> Focus
+                <Button onClick={() => setFocus((v) => !v)}>
+                  <Focus size={15} /> {focus ? "Exit focus" : "Focus"}
                 </Button>
               </div>
             </div>
