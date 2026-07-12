@@ -464,6 +464,9 @@ function Workspace({ lesson, moduleTitle }: { lesson: Lesson; moduleTitle: strin
 
       {/* CENTER — one continuous, scroll-spied page of all stages */}
       <main id="lesson-content" className="concept-workspace">
+        <div className="reading-progress" aria-hidden>
+          <i style={{ width: `${((Math.max(activeIndex, 0) + 1) / renderedStages.length) * 100}%` }} />
+        </div>
         <div className="lesson-head">
           <div>
             <div className="breadcrumbs">
