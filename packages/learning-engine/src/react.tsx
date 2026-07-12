@@ -40,6 +40,8 @@ type LocalState = {
   /** last stage/section id the learner viewed, per lesson — restored on reload */
   stages: Record<string, string>;
   evidence: Record<string, LessonEvidence>;
+  /** completed milestone keys per module project id */
+  projectMilestones: Record<string, string[]>;
   lastVisited?: string;
 };
 
@@ -54,12 +56,23 @@ type Context = LocalState & {
   setStage: (id: string, stage: string) => void;
   recordEvidence: (id: string, patch: Partial<LessonEvidence>) => void;
   getEvidence: (id: string) => LessonEvidence;
+  /** Completed milestone keys for a module project. */
+  getMilestones: (projectId: string) => string[];
+  /** Toggle a single project milestone's completion. */
+  toggleMilestone: (projectId: string, milestone: string) => void;
   /** Weighted 0-100 mastery score derived from a lesson's captured evidence. */
   masteryScoreFor: (id: string) => number;
 };
 
 const LearningContext = createContext<Context | null>(null);
-const initial: LocalState = { progress: {}, bookmarks: [], notes: {}, stages: {}, evidence: {} };
+const initial: LocalState = {
+  progress: {},
+  bookmarks: [],
+  notes: {},
+  stages: {},
+  evidence: {},
+  projectMilestones: {},
+};
 
 /** Tolerate older persisted payloads that predate `stages`/`evidence`. */
 function hydrate(raw: string): LocalState {
@@ -69,6 +82,7 @@ function hydrate(raw: string): LocalState {
     ...parsed,
     stages: parsed.stages ?? {},
     evidence: parsed.evidence ?? {},
+    projectMilestones: parsed.projectMilestones ?? {},
   };
 }
 
@@ -151,6 +165,15 @@ export function LearningProvider({
           };
         }),
       getEvidence,
+      getMilestones: (projectId) => state.projectMilestones[projectId] ?? [],
+      toggleMilestone: (projectId, milestone) =>
+        setState((s) => {
+          const done = s.projectMilestones[projectId] ?? [];
+          const next = done.includes(milestone)
+            ? done.filter((m) => m !== milestone)
+            : [...done, milestone];
+          return { ...s, projectMilestones: { ...s.projectMilestones, [projectId]: next } };
+        }),
       masteryScoreFor: (id) => {
         const e = state.evidence[id] ?? emptyEvidence;
         const verified = Object.values(e.criteria).length > 0 && Object.values(e.criteria).every(Boolean);
