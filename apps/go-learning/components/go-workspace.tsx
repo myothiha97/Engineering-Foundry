@@ -90,6 +90,118 @@ const statusLabel: Record<string, string> = {
 // Flat topic index (topic + module context) for lookups — pure over static catalog data.
 const topicIndex = new Map<string, TopicRef>(allTopics(goCurriculum).map((t) => [t.id, t]));
 
+type Exercise = Lesson["exercises"][number];
+
+const exerciseTypeLabel: Record<string, string> = {
+  prediction: "Predict",
+  "code-reading": "Read the code",
+  implementation: "Implement",
+  debugging: "Debug",
+  refactoring: "Refactor",
+  design: "Design",
+  advanced: "Challenge",
+};
+
+/** One problem the learner works: progressive hints, an optional answer reveal, self-attest. */
+function ExerciseCard({
+  index,
+  exercise,
+  done,
+  onComplete,
+  variant,
+}: {
+  index: number;
+  exercise: Exercise;
+  done: boolean;
+  onComplete: () => void;
+  variant?: "challenge";
+}) {
+  const [hintsShown, setHintsShown] = useState(0);
+  const [answerShown, setAnswerShown] = useState(false);
+  const hasMoreHints = hintsShown < exercise.hints.length;
+
+  return (
+    <div className={done ? "exercise-card done" : "exercise-card"} data-variant={variant}>
+      <div className="exercise-card-head">
+        <span className="exercise-num">{String(index + 1).padStart(2, "0")}</span>
+        <span className="exercise-type">{exerciseTypeLabel[exercise.type] ?? exercise.type}</span>
+        {done && <Check size={15} className="exercise-check" />}
+      </div>
+      <p className="exercise-prompt">{exercise.prompt}</p>
+      {exercise.starterCode && (
+        <pre className="exercise-code">
+          <code>{exercise.starterCode}</code>
+        </pre>
+      )}
+      {hintsShown > 0 && (
+        <ul className="exercise-hints">
+          {exercise.hints.slice(0, hintsShown).map((h, i) => (
+            <li key={i}>{h}</li>
+          ))}
+        </ul>
+      )}
+      {answerShown && exercise.expectedAnswer && (
+        <div className="exercise-answer">
+          <SectionLabel>Answer</SectionLabel>
+          <p>{exercise.expectedAnswer}</p>
+        </div>
+      )}
+      <div className="exercise-actions">
+        {hasMoreHints && (
+          <button className="ghost-btn" onClick={() => setHintsShown((n) => n + 1)}>
+            {hintsShown === 0 ? "Show hint" : "Next hint"}
+          </button>
+        )}
+        {exercise.expectedAnswer && !answerShown && (
+          <button className="ghost-btn" onClick={() => setAnswerShown(true)}>
+            Reveal answer
+          </button>
+        )}
+        {!done && (
+          <button className="solid-btn" onClick={onComplete}>
+            Mark worked through
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The module's hands-on project with a persisted milestone checklist. */
+function ProjectPanel({
+  project,
+  completed,
+  onToggle,
+}: {
+  project: { title: string; outcome: string; milestones: string[] };
+  completed: string[];
+  onToggle: (key: string) => void;
+}) {
+  const doneCount = project.milestones.filter((_, i) => completed.includes(String(i))).length;
+  return (
+    <div className="module-project">
+      <div className="module-project-head">
+        <SectionLabel>Module project</SectionLabel>
+        <span className="module-project-count">
+          {doneCount}/{project.milestones.length}
+        </span>
+      </div>
+      <strong className="module-project-title">{project.title}</strong>
+      <p className="module-project-outcome">{project.outcome}</p>
+      <ul className="milestone-list">
+        {project.milestones.map((m, i) => (
+          <li key={i}>
+            <label>
+              <input type="checkbox" checked={completed.includes(String(i))} onChange={() => onToggle(String(i))} />
+              <span>{m}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function GoWorkspace(props: { lesson: Lesson; moduleTitle: string }) {
   return (
     <LearningProvider storageKey="go-runtime-lab">
@@ -111,6 +223,8 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     applyEvent,
     recordEvidence,
     getEvidence,
+    getMilestones,
+    toggleMilestone,
     masteryScoreFor,
   } = useLearning();
 
@@ -127,6 +241,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   const [prediction, setPrediction] = useState<string>();
   const [revealed, setRevealed] = useState(false);
   const [panel, setPanel] = useState<"nav" | "toc" | null>(null);
+  const [doneExercises, setDoneExercises] = useState(new Set<string>());
 
   const sectionRefs = useRef(new Map<StageId, HTMLElement>());
   const restored = useRef(false);
@@ -254,6 +369,17 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     applyEvent(lesson.id, { type: "VERIFY_MASTERY", passed: true });
   };
 
+  const completeExercise = (id: string) => {
+    setDoneExercises((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    recordEvidence(lesson.id, { exercisePassed: true });
+    applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct: true });
+  };
+
   const registerSection = (id: StageId) => (el: HTMLElement | null) => {
     if (el) sectionRefs.current.set(id, el);
     else sectionRefs.current.delete(id);
@@ -355,18 +481,44 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     }
 
     if (id === "exercises") {
+      const regular = lesson.exercises.filter((e) => e.type !== "advanced");
+      const challenges = lesson.exercises.filter((e) => e.type === "advanced");
       return (
-        <div className="exercise-list">
-          {lesson.exercises.map((exercise, index) => (
-            <div className="exercise-row" key={exercise.id}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <small>{exercise.type}</small>
-                <strong>{exercise.prompt}</strong>
-                {exercise.hints.length > 0 && <p className="exercise-hint">Hint: {exercise.hints[0]}</p>}
-              </div>
-            </div>
+        <div className="exercise-stack">
+          {regular.map((exercise, i) => (
+            <ExerciseCard
+              key={exercise.id}
+              index={i}
+              exercise={exercise}
+              done={doneExercises.has(exercise.id)}
+              onComplete={() => completeExercise(exercise.id)}
+            />
           ))}
+
+          {challenges.length > 0 && (
+            <div className="challenge-block">
+              <SectionLabel>Challenge checkpoint</SectionLabel>
+              <p className="challenge-intro">Between sessions — push past the guided path on your own machine.</p>
+              {challenges.map((exercise, i) => (
+                <ExerciseCard
+                  key={exercise.id}
+                  index={regular.length + i}
+                  exercise={exercise}
+                  done={doneExercises.has(exercise.id)}
+                  onComplete={() => completeExercise(exercise.id)}
+                  variant="challenge"
+                />
+              ))}
+            </div>
+          )}
+
+          {selectedModule?.project && (
+            <ProjectPanel
+              project={selectedModule.project}
+              completed={getMilestones(selectedModule.id)}
+              onToggle={(key) => toggleMilestone(selectedModule.id, key)}
+            />
+          )}
         </div>
       );
     }
@@ -490,6 +642,18 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
           {resources.length > 0 && (
             <section className="preview-block" id="preview-resources">
               <ResourceList items={resources} title="Resources" />
+            </section>
+          )}
+          {module?.project && (
+            <section className="preview-block" id="preview-project">
+              <SectionLabel>Module project</SectionLabel>
+              <strong className="module-project-title">{module.project.title}</strong>
+              <p>{module.project.outcome}</p>
+              <ol className="milestone-steps">
+                {module.project.milestones.map((m, i) => (
+                  <li key={i}>{m}</li>
+                ))}
+              </ol>
             </section>
           )}
           <p className="preview-foot">
