@@ -1,5 +1,12 @@
-import type { Lesson } from "../../packages/content-schema/src/index";
-import { goSourceToProcess, goToolchainModules } from "./module-0";
+import type { CurriculumModule, Lesson } from "../../packages/content-schema/src/index";
+import { goSourceToProcess, goToolchainModules, goModule0 } from "./module-0";
+import {
+  goBasicTypes,
+  goCopySemantics,
+  goFunctionsDefer,
+  goControlFlow,
+  goModule1,
+} from "./module-1";
 
 /**
  * Every authored Go lesson, in curriculum order. The workspace opens any lesson
@@ -7,8 +14,18 @@ import { goSourceToProcess, goToolchainModules } from "./module-0";
  * moment its `lessonId` resolves here (and its `status` is flipped to
  * "authored"). New modules append their lessons below.
  */
-export const goLessons: Lesson[] = [goSourceToProcess, goToolchainModules];
+export const goLessons: Lesson[] = [
+  goSourceToProcess,
+  goToolchainModules,
+  goBasicTypes,
+  goCopySemantics,
+  goFunctionsDefer,
+  goControlFlow,
+];
 
 export const goLessonsById: Record<string, Lesson> = Object.fromEntries(
   goLessons.map((lesson) => [lesson.id, lesson]),
 );
+
+/** Content-schema modules, used for referential validation of lessonIds. */
+export const goContentModules: CurriculumModule[] = [goModule0, goModule1];
