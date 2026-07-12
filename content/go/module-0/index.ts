@@ -1,5 +1,7 @@
 import type { CurriculumModule, Lesson } from "../../../packages/content-schema/src/index";
 
+export { goToolchainModules } from "./toolchain-modules";
+
 export const goModule0: CurriculumModule = {
   id: "go-0",
   courseId: "go",
@@ -7,7 +9,7 @@ export const goModule0: CurriculumModule = {
   order: 0,
   description:
     "Trace source through compilation, linking, initialization, runtime startup, and a running executable.",
-  lessonIds: ["go-source-to-process"],
+  lessonIds: ["go-source-to-process", "go-toolchain-modules"],
   projectId: "go-execution-inspector",
 };
 

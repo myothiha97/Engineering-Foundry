@@ -74,7 +74,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Real projects are modules; the tool decides what compiles and what is cached.",
           learnerOutcome: "Manage dependencies, versions, and multi-module workspaces confidently.",
           ledgerFlowApplication: "Structure LedgerFlow as a module with reproducible builds.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-toolchain-modules",
           resources: [
             {
               label: "How to Write Go Code",
