@@ -263,6 +263,16 @@ function CommandPalette({
     }
   }, [open]);
   useEffect(() => setActive(0), [query]);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -308,6 +318,9 @@ function CommandPalette({
             aria-label="Search catalog"
           />
           <kbd>esc</kbd>
+          <button className="palette-close" aria-label="Close search" onClick={onClose}>
+            <X size={16} />
+          </button>
         </div>
         <ul className="palette-results">
           {filtered.length === 0 && <li className="palette-empty">No matches</li>}

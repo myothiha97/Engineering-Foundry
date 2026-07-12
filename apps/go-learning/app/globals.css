@@ -1621,7 +1621,9 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
+  width: auto !important;
+  min-width: 96px;
+  height: 40px;
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1685,6 +1687,23 @@ a {
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 2px 6px;
+}
+.palette-close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.palette-close:hover,
+.palette-close:focus-visible {
+  color: var(--ink);
+  border-color: var(--line);
 }
 .palette-results {
   list-style: none;
