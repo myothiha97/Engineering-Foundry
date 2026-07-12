@@ -1654,7 +1654,9 @@ a {
     scroll-margin-top: 80px;
   }
   .reading-progress {
-    top: 64px;
+    /* The main column already begins below the fixed 64px topbar. Adding that
+       offset again pushes the sticky line through the lesson heading. */
+    top: 0;
   }
   .stage-number {
     display: none;
