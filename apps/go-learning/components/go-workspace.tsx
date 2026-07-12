@@ -9,6 +9,7 @@ import {
   Lightbulb,
   ListTree,
   Menu,
+  Search,
   X,
 } from "lucide-react";
 import { GoEditor } from "@platform/code-editor";
@@ -24,7 +25,7 @@ import {
   SectionLabel,
   StageArticle,
 } from "@platform/ui";
-import { allTopics, goCurriculum, type CurriculumModule, type TopicRef } from "@platform/curriculum";
+import { allTopics, goCurriculum, goResources, type CurriculumModule, type TopicRef } from "@platform/curriculum";
 
 const stageMeta = [
   ["problem", "01", "The problem"],
@@ -202,6 +203,132 @@ function ProjectPanel({
   );
 }
 
+type PaletteItem =
+  | { kind: "topic"; id: string; title: string; sub: string }
+  | { kind: "stage"; id: string; title: string; sub: string }
+  | { kind: "resource"; url: string; title: string; sub: string };
+
+/** ⌘K search over the whole catalog: topics, the current lesson's stages, and resources. */
+function CommandPalette({
+  open,
+  onClose,
+  stages,
+  onTopic,
+  onStage,
+}: {
+  open: boolean;
+  onClose: () => void;
+  stages: readonly (readonly [StageId, string, string])[];
+  onTopic: (id: string) => void;
+  onStage: (id: StageId) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const items = useMemo<PaletteItem[]>(() => {
+    const topics: PaletteItem[] = allTopics(goCurriculum).map((t) => ({
+      kind: "topic",
+      id: t.id,
+      title: t.title,
+      sub: `${t.moduleTitle} · ${t.status}`,
+    }));
+    const stageItems: PaletteItem[] = stages.map(([id, number, label]) => ({
+      kind: "stage",
+      id,
+      title: label,
+      sub: `Stage ${number}`,
+    }));
+    const resourceItems: PaletteItem[] = goResources.map((r) => ({
+      kind: "resource",
+      url: r.url,
+      title: r.label,
+      sub: `${r.kind}${r.stars ? ` · ${r.stars}★` : ""}`,
+    }));
+    return [...topics, ...stageItems, ...resourceItems];
+  }, [stages]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items.slice(0, 40);
+    return items.filter((i) => `${i.title} ${i.sub}`.toLowerCase().includes(q)).slice(0, 40);
+  }, [items, query]);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setActive(0);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+  useEffect(() => setActive(0), [query]);
+
+  if (!open) return null;
+
+  const choose = (item: PaletteItem) => {
+    if (item.kind === "topic") onTopic(item.id);
+    else if (item.kind === "stage") onStage(item.id as StageId);
+    else window.open(item.url, "_blank", "noreferrer");
+    onClose();
+  };
+
+  return (
+    <div className="palette-overlay" onClick={onClose} role="presentation">
+      <div
+        className="palette"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search the catalog"
+      >
+        <div className="palette-input">
+          <Search size={16} />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActive((a) => Math.min(a + 1, filtered.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive((a) => Math.max(a - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                const it = filtered[active];
+                if (it) choose(it);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                onClose();
+              }
+            }}
+            placeholder="Search topics, stages, resources…"
+            aria-label="Search catalog"
+          />
+          <kbd>esc</kbd>
+        </div>
+        <ul className="palette-results">
+          {filtered.length === 0 && <li className="palette-empty">No matches</li>}
+          {filtered.map((item, i) => (
+            <li key={`${item.kind}-${item.kind === "resource" ? item.url : item.id}`}>
+              <button
+                className={i === active ? "palette-item active" : "palette-item"}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => choose(item)}
+              >
+                <span className="palette-kind">{item.kind}</span>
+                <span className="palette-title">{item.title}</span>
+                <span className="palette-sub">{item.sub}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export function GoWorkspace(props: { lesson: Lesson; moduleTitle: string }) {
   return (
     <LearningProvider storageKey="go-runtime-lab">
@@ -242,10 +369,12 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   const [revealed, setRevealed] = useState(false);
   const [panel, setPanel] = useState<"nav" | "toc" | null>(null);
   const [doneExercises, setDoneExercises] = useState(new Set<string>());
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const sectionRefs = useRef(new Map<StageId, HTMLElement>());
   const restored = useRef(false);
   const firedRef = useRef(new Set<string>());
+  const pendingStage = useRef<StageId | null>(null);
 
   const selectedTopic = topicIndex.get(selectedTopicId);
   const selectedModule = goCurriculum.modules.find((m) => m.id === selectedTopic?.moduleId);
@@ -347,11 +476,41 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     return () => observer.disconnect();
   }, [renderedStages, isLessonView]);
 
-  // Scroll back to the top of the column whenever the selected topic changes.
+  // On topic change: scroll to a pending stage (search into a stage) if one is queued,
+  // otherwise reset to the top of the column. Poll for the section ref so we scroll only
+  // once the freshly mounted lesson sections exist (the editor section mounts late).
   useEffect(() => {
+    const target = pendingStage.current;
+    if (target) {
+      pendingStage.current = null;
+      let tries = 0;
+      const tryScroll = () => {
+        const el = sectionRefs.current.get(target);
+        if (el) {
+          setActiveStage(target);
+          el.scrollIntoView({ block: "start" });
+        } else if (tries++ < 30) {
+          requestAnimationFrame(tryScroll);
+        }
+      };
+      requestAnimationFrame(tryScroll);
+      return;
+    }
     document.getElementById("lesson-content")?.scrollTo({ top: 0 });
     window.scrollTo({ top: 0 });
   }, [selectedTopicId]);
+
+  // ⌘K / Ctrl-K toggles the command palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const selectTopic = (id: string) => {
     setSelectedTopicId(id);
@@ -362,6 +521,17 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     setActiveStage(id);
     sectionRefs.current.get(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
     setPanel(null);
+  };
+
+  // From search: a stage belongs to the authored lesson, so switch into it first if needed.
+  // Queue the target so the topic-change effect scrolls to it instead of resetting to top.
+  const goToStageFromSearch = (id: StageId) => {
+    if (isLessonView) {
+      scrollToStage(id);
+      return;
+    }
+    pendingStage.current = id;
+    setSelectedTopicId(lessonTopicId);
   };
 
   const submitMastery = () => {
@@ -681,6 +851,11 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
           </div>
         </div>
         <div className="top-actions">
+          <button className="search-trigger" aria-label="Search catalog" onClick={() => setPaletteOpen(true)}>
+            <Search size={15} />
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
           <button aria-label="Toggle focus mode" aria-pressed={focus} onClick={() => setFocus((v) => !v)}>
             <Focus size={17} />
           </button>
@@ -868,6 +1043,14 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       </aside>
 
       {panel && <div className="panel-backdrop" onClick={() => setPanel(null)} aria-hidden />}
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        stages={renderedStages}
+        onTopic={selectTopic}
+        onStage={goToStageFromSearch}
+      />
     </div>
   );
 }
