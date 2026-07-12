@@ -10,6 +10,7 @@ import {
   Lightbulb,
   ListTree,
   Menu,
+  RotateCcw,
   Search,
   X,
 } from "lucide-react";
@@ -26,7 +27,13 @@ import {
   SectionLabel,
   StageArticle,
 } from "@platform/ui";
-import { allTopics, goCurriculum, goResources, type CurriculumModule, type TopicRef } from "@platform/curriculum";
+import {
+  allTopics,
+  goCurriculum,
+  goResources,
+  type CurriculumModule,
+  type TopicRef,
+} from "@platform/curriculum";
 
 const stageMeta = [
   ["problem", "01", "The problem"],
@@ -59,11 +66,41 @@ const widgetStages = new Set<StageId>([
 ]);
 
 const pipeline: DiagramNode[] = [
-  { id: "resolve", label: "resolve", detail: "Build the package dependency graph and select module versions.", x: 20, y: 90 },
-  { id: "compile", label: "compile", detail: "Type-check packages and emit object data.", x: 175, y: 90 },
-  { id: "link", label: "link", detail: "Resolve reachable symbols into an executable image.", x: 330, y: 90 },
-  { id: "load", label: "OS load", detail: "Map executable segments and transfer control to its entry point.", x: 485, y: 90 },
-  { id: "runtime", label: "runtime", detail: "Prepare scheduler, allocator, GC, package init, then main.", x: 640, y: 90 },
+  {
+    id: "resolve",
+    label: "resolve",
+    detail: "Build the package dependency graph and select module versions.",
+    x: 20,
+    y: 90,
+  },
+  {
+    id: "compile",
+    label: "compile",
+    detail: "Type-check packages and emit object data.",
+    x: 175,
+    y: 90,
+  },
+  {
+    id: "link",
+    label: "link",
+    detail: "Resolve reachable symbols into an executable image.",
+    x: 330,
+    y: 90,
+  },
+  {
+    id: "load",
+    label: "OS load",
+    detail: "Map executable segments and transfer control to its entry point.",
+    x: 485,
+    y: 90,
+  },
+  {
+    id: "runtime",
+    label: "runtime",
+    detail: "Prepare scheduler, allocator, GC, package init, then main.",
+    x: 640,
+    y: 90,
+  },
 ];
 
 const progressLabels: Record<string, string> = {
@@ -194,7 +231,11 @@ function ProjectPanel({
         {project.milestones.map((m, i) => (
           <li key={i}>
             <label>
-              <input type="checkbox" checked={completed.includes(String(i))} onChange={() => onToggle(String(i))} />
+              <input
+                type="checkbox"
+                checked={completed.includes(String(i))}
+                onChange={() => onToggle(String(i))}
+              />
               <span>{m}</span>
             </label>
           </li>
@@ -343,7 +384,16 @@ function CommandPalette({
   );
 }
 
-const resourceKindOrder = ["playground", "doc", "article", "repo", "video", "course", "book", "tool"];
+const resourceKindOrder = [
+  "playground",
+  "doc",
+  "article",
+  "repo",
+  "video",
+  "course",
+  "book",
+  "tool",
+];
 const resourceKindLabel: Record<string, string> = {
   playground: "Interactive & playgrounds",
   doc: "Documentation",
@@ -376,8 +426,8 @@ function ResourcesHub() {
           </div>
           <h1>Resource library</h1>
           <p>
-            Curated documentation, repositories, and videos for learning Go end to end — plus the references attached
-            to each module.
+            Curated documentation, repositories, and videos for learning Go end to end — plus the
+            references attached to each module.
           </p>
           <div className="lesson-meta">
             <Badge>{goResources.length} curated</Badge>
@@ -420,16 +470,21 @@ export function GoWorkspace(props: { lesson: Lesson; moduleTitle: string }) {
 function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   const {
     progress,
+    completedLessons,
     stages,
     bookmarks,
     notes,
     hydrated,
     setStage,
+    toggleLessonComplete,
+    resetLesson,
     setNote,
     toggleBookmark,
     applyEvent,
     recordEvidence,
     getEvidence,
+    getExerciseCompletions,
+    markExerciseComplete,
     getMilestones,
     toggleMilestone,
     masteryScoreFor,
@@ -437,7 +492,8 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
 
   // The catalog topic that maps to the one authored lesson — the default selection.
   const lessonTopicId = useMemo(() => {
-    for (const m of goCurriculum.modules) for (const t of m.topics) if (t.lessonId === lesson.id) return t.id;
+    for (const m of goCurriculum.modules)
+      for (const t of m.topics) if (t.lessonId === lesson.id) return t.id;
     return goCurriculum.modules[0]?.topics[0]?.id ?? "";
   }, [lesson.id]);
 
@@ -448,7 +504,6 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   const [prediction, setPrediction] = useState<string>();
   const [revealed, setRevealed] = useState(false);
   const [panel, setPanel] = useState<"nav" | "toc" | null>(null);
-  const [doneExercises, setDoneExercises] = useState(new Set<string>());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
 
@@ -468,17 +523,33 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       stageMeta.filter(([id]) => {
         if (widgetStages.has(id)) return true;
         const c = normalizeStage(lesson.sections[id]);
-        return Boolean(c.body?.trim() || c.blocks?.length || c.example || c.scenario || c.keyPoints?.length);
+        return Boolean(
+          c.body?.trim() || c.blocks?.length || c.example || c.scenario || c.keyPoints?.length,
+        );
       }),
     [lesson],
   );
 
   const state = progress[lesson.id] ?? "not_started";
   const evidence = getEvidence(lesson.id);
-  const score = masteryScoreFor(lesson.id);
+  const requiredCriteria = lesson.masteryCriteria.filter((criterion) => criterion.required);
+  const score = masteryScoreFor(
+    lesson.id,
+    requiredCriteria.map((criterion) => criterion.id),
+  );
+  const completed = completedLessons.includes(lesson.id);
+  const completedExercises = new Set(getExerciseCompletions(lesson.id));
+  const authoredLessonIds = allTopics(goCurriculum)
+    .filter((topic) => topic.status === "authored" && topic.lessonId)
+    .map((topic) => topic.lessonId!);
+  const completedAuthoredLessons = authoredLessonIds.filter((id) =>
+    completedLessons.includes(id),
+  ).length;
+  const courseCompletion = authoredLessonIds.length
+    ? Math.round((completedAuthoredLessons / authoredLessonIds.length) * 100)
+    : 0;
   const activeIndex = renderedStages.findIndex(([id]) => id === activeStage);
 
-  const requiredCriteria = lesson.masteryCriteria.filter((c) => c.required);
   const requiredMet = requiredCriteria.every((c) => evidence.criteria[c.id]);
   const mastered = state === "mastered";
 
@@ -495,7 +566,9 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     const saved = stages[lesson.id];
     if (saved && renderedStages.some(([id]) => id === saved)) {
       setActiveStage(saved as StageId);
-      requestAnimationFrame(() => sectionRefs.current.get(saved as StageId)?.scrollIntoView({ block: "start" }));
+      requestAnimationFrame(() =>
+        sectionRefs.current.get(saved as StageId)?.scrollIntoView({ block: "start" }),
+      );
     }
   }, [hydrated, stages, lesson.id, renderedStages, isLessonView]);
 
@@ -510,7 +583,8 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   useEffect(() => {
     if (!isLessonView) return;
     const mentalIdx = renderedStages.findIndex(([id]) => id === "mental-model");
-    const anchorMental = mentalIdx >= 0 ? mentalIdx : renderedStages.findIndex(([id]) => id === "diagram");
+    const anchorMental =
+      mentalIdx >= 0 ? mentalIdx : renderedStages.findIndex(([id]) => id === "diagram");
     const anchorSummary = renderedStages.findIndex(([id]) => id === "summary");
     if (anchorMental >= 0 && activeIndex >= anchorMental && !firedRef.current.has("mental-model")) {
       firedRef.current.add("mental-model");
@@ -634,14 +708,22 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   };
 
   const completeExercise = (id: string) => {
-    setDoneExercises((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
+    markExerciseComplete(lesson.id, id);
     recordEvidence(lesson.id, { exercisePassed: true });
     applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct: true });
+  };
+
+  const resetCurrentLesson = () => {
+    const confirmed = window.confirm(
+      "Reset this lesson's progress, evidence, exercises, and project milestones? Your note and bookmark will be kept.",
+    );
+    if (!confirmed) return;
+    resetLesson(lesson.id, selectedModule?.id);
+    setPrediction(undefined);
+    setRevealed(false);
+    firedRef.current.clear();
+    setActiveStage("problem");
+    sectionRefs.current.get("problem")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const registerSection = (id: StageId) => (el: HTMLElement | null) => {
@@ -672,7 +754,8 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             </div>
             <p>{inspectorNode.detail}</p>
             <p className="invariant">
-              Invariant: every imported package is initialized exactly once before the package that imports it.
+              Invariant: every imported package is initialized exactly once before the package that
+              imports it.
             </p>
           </div>
         </div>
@@ -714,7 +797,10 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             Reveal execution trace
           </Button>
           {revealed && (
-            <div className={prediction === "dependency init" ? "reveal correct" : "reveal"} role="status">
+            <div
+              className={prediction === "dependency init" ? "reveal correct" : "reveal"}
+              role="status"
+            >
               <strong>{prediction === "dependency init" ? "Correct." : "Revise the model."}</strong>{" "}
               Dependencies initialize before the importing package’s variables and init functions.
             </div>
@@ -754,7 +840,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
               key={exercise.id}
               index={i}
               exercise={exercise}
-              done={doneExercises.has(exercise.id)}
+              done={completedExercises.has(exercise.id)}
               onComplete={() => completeExercise(exercise.id)}
             />
           ))}
@@ -762,13 +848,15 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
           {challenges.length > 0 && (
             <div className="challenge-block">
               <SectionLabel>Challenge checkpoint</SectionLabel>
-              <p className="challenge-intro">Between sessions — push past the guided path on your own machine.</p>
+              <p className="challenge-intro">
+                Between sessions — push past the guided path on your own machine.
+              </p>
               {challenges.map((exercise, i) => (
                 <ExerciseCard
                   key={exercise.id}
                   index={regular.length + i}
                   exercise={exercise}
-                  done={doneExercises.has(exercise.id)}
+                  done={completedExercises.has(exercise.id)}
                   onComplete={() => completeExercise(exercise.id)}
                   variant="challenge"
                 />
@@ -800,7 +888,9 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
                 <input
                   type="checkbox"
                   checked={Boolean(evidence.criteria[criterion.id])}
-                  onChange={(e) => recordEvidence(lesson.id, { criteria: { [criterion.id]: e.target.checked } })}
+                  onChange={(e) =>
+                    recordEvidence(lesson.id, { criteria: { [criterion.id]: e.target.checked } })
+                  }
                 />
                 <span>
                   <small>
@@ -847,7 +937,9 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   /** Inspectable catalog preview for a topic that has no authored lesson yet. */
   const renderPreview = (topic: TopicRef, module?: CurriculumModule) => {
     const resources = topic.resources ?? module?.resources ?? [];
-    const prereqs = topic.prerequisites.map((id) => topicIndex.get(id)).filter((t): t is TopicRef => Boolean(t));
+    const prereqs = topic.prerequisites
+      .map((id) => topicIndex.get(id))
+      .filter((t): t is TopicRef => Boolean(t));
     return (
       <>
         <div className="lesson-head">
@@ -860,9 +952,13 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             <h1>{topic.title}</h1>
             <p>{topic.summary}</p>
             <div className="lesson-meta">
-              <Badge className={`state-badge state-${topic.status}`}>{statusLabel[topic.status]}</Badge>
+              <Badge className={`state-badge state-${topic.status}`}>
+                {statusLabel[topic.status]}
+              </Badge>
               <Badge>{topic.concepts.length} concepts</Badge>
-              {topic.prerequisites.length > 0 && <Badge>{topic.prerequisites.length} prerequisites</Badge>}
+              {topic.prerequisites.length > 0 && (
+                <Badge>{topic.prerequisites.length} prerequisites</Badge>
+              )}
             </div>
           </div>
         </div>
@@ -921,7 +1017,8 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             </section>
           )}
           <p className="preview-foot">
-            This topic is planned — freely inspectable, but not yet masterable. Content is on the way.
+            This topic is planned — freely inspectable, but not yet masterable. Content is on the
+            way.
           </p>
         </div>
       </>
@@ -934,7 +1031,11 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
         Skip to lesson
       </a>
       <header className="go-topbar">
-        <button className="panel-trigger nav-trigger" aria-label="Open curriculum" onClick={() => setPanel("nav")}>
+        <button
+          className="panel-trigger nav-trigger"
+          aria-label="Open curriculum"
+          onClick={() => setPanel("nav")}
+        >
           <Menu size={18} />
         </button>
         <div className="go-brand">
@@ -945,7 +1046,11 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
           </div>
         </div>
         <div className="top-actions">
-          <button className="search-trigger" aria-label="Search catalog" onClick={() => setPaletteOpen(true)}>
+          <button
+            className="search-trigger"
+            aria-label="Search catalog"
+            onClick={() => setPaletteOpen(true)}
+          >
             <Search size={15} />
             <span>Search</span>
             <kbd>⌘K</kbd>
@@ -962,7 +1067,11 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             <Focus size={17} />
             <span className="focus-toggle-label">Exit focus</span>
           </button>
-          <button className="panel-trigger toc-trigger" aria-label="Open contents" onClick={() => setPanel("toc")}>
+          <button
+            className="panel-trigger toc-trigger"
+            aria-label="Open contents"
+            onClick={() => setPanel("toc")}
+          >
             <ListTree size={17} />
           </button>
           <a href="http://localhost:3001" className="switch-app">
@@ -978,13 +1087,19 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       <aside className="curriculum" aria-label="Curriculum" id="curriculum-panel">
         <div className="panel-close-row">
           <SectionLabel>Guided curriculum</SectionLabel>
-          <button className="panel-close" aria-label="Close curriculum" onClick={() => setPanel(null)}>
+          <button
+            className="panel-close"
+            aria-label="Close curriculum"
+            onClick={() => setPanel(null)}
+          >
             <X size={16} />
           </button>
         </div>
         <div className="curriculum-head">
-          <ProgressRing value={score} label="Evidence score" />
-          <p className="ring-caption">Mastery evidence collected</p>
+          <ProgressRing value={courseCompletion} label="Course completion" />
+          <p className="ring-caption">
+            {completedAuthoredLessons}/{authoredLessonIds.length} authored lessons complete
+          </p>
         </div>
         <button
           className={resourcesOpen ? "hub-trigger active" : "hub-trigger"}
@@ -1008,17 +1123,25 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
               <div className="module-topics">
                 {module.topics.map((topic) => {
                   const active = topic.id === selectedTopicId;
+                  const topicCompleted = Boolean(
+                    topic.lessonId && completedLessons.includes(topic.lessonId),
+                  );
                   return (
                     <button
                       key={topic.id}
-                      className={active ? "topic-row active" : "topic-row"}
+                      className={`${active ? "topic-row active" : "topic-row"}${topicCompleted ? " completed" : ""}`}
                       data-status={topic.status}
                       aria-current={active ? "page" : undefined}
                       onClick={() => selectTopic(topic.id)}
                     >
                       <span className="topic-dot" aria-hidden />
                       <span className="topic-title">{topic.title}</span>
-                      {topic.status !== "authored" && <em className="topic-tag">{statusTag[topic.status]}</em>}
+                      {topicCompleted && (
+                        <Check size={14} className="topic-complete" aria-label="Completed" />
+                      )}
+                      {topic.status !== "authored" && (
+                        <em className="topic-tag">{statusTag[topic.status]}</em>
+                      )}
                     </button>
                   );
                 })}
@@ -1035,7 +1158,11 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
         ) : isLessonView ? (
           <>
             <div className="reading-progress" aria-hidden>
-              <i style={{ width: `${((Math.max(activeIndex, 0) + 1) / renderedStages.length) * 100}%` }} />
+              <i
+                style={{
+                  width: `${((Math.max(activeIndex, 0) + 1) / renderedStages.length) * 100}%`,
+                }}
+              />
             </div>
             <div className="lesson-head">
               <div>
@@ -1053,6 +1180,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
                   <Badge>{lesson.difficulty}</Badge>
                   <Badge>{lesson.concepts.length} concepts</Badge>
                   <Badge className={`state-badge state-${state}`}>{progressLabels[state]}</Badge>
+                  <Badge>Mastery evidence {score}%</Badge>
                 </div>
               </div>
               <div className="lesson-actions">
@@ -1067,6 +1195,16 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
                 <Button onClick={() => setFocus((v) => !v)}>
                   <Focus size={15} /> {focus ? "Exit focus" : "Focus"}
                 </Button>
+                <Button
+                  className={completed ? "completion-toggle completed" : "completion-toggle"}
+                  aria-pressed={completed}
+                  onClick={() => toggleLessonComplete(lesson.id)}
+                >
+                  <Check size={15} /> {completed ? "Completed" : "Mark complete"}
+                </Button>
+                <button className="reset-progress" onClick={resetCurrentLesson}>
+                  <RotateCcw size={14} /> Reset progress
+                </button>
               </div>
             </div>
 
@@ -1116,7 +1254,11 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
           <SectionLabel>
             {resourcesOpen ? "Categories" : isLessonView ? "On this page" : "About this topic"}
           </SectionLabel>
-          <button className="panel-close" aria-label="Close contents" onClick={() => setPanel(null)}>
+          <button
+            className="panel-close"
+            aria-label="Close contents"
+            onClick={() => setPanel(null)}
+          >
             <X size={16} />
           </button>
         </div>
@@ -1126,7 +1268,9 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
               <button
                 key={k}
                 onClick={() =>
-                  document.getElementById(`hub-${k}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  document
+                    .getElementById(`hub-${k}`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
                 }
               >
                 <span className="toc-title">{resourceKindLabel[k] ?? k}</span>
@@ -1134,7 +1278,9 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             ))}
             <button
               onClick={() =>
-                document.getElementById("hub-modules")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                document
+                  .getElementById("hub-modules")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
               }
             >
               <span className="toc-title">By module</span>
@@ -1156,7 +1302,9 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
           </nav>
         ) : selectedTopic ? (
           <div className="topic-aside">
-            <p className={`topic-aside-status state-${selectedTopic.status}`}>{statusLabel[selectedTopic.status]}</p>
+            <p className={`topic-aside-status state-${selectedTopic.status}`}>
+              {statusLabel[selectedTopic.status]}
+            </p>
             {selectedTopic.prerequisites.length > 0 && (
               <>
                 <SectionLabel>Prerequisites</SectionLabel>

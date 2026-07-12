@@ -35,11 +35,15 @@ export const emptyEvidence: LessonEvidence = {
 
 type LocalState = {
   progress: Record<string, ProgressState>;
+  /** Learner-controlled completion, intentionally separate from evidence-backed mastery. */
+  completedLessons: string[];
   bookmarks: string[];
   notes: Record<string, string>;
   /** last stage/section id the learner viewed, per lesson — restored on reload */
   stages: Record<string, string>;
   evidence: Record<string, LessonEvidence>;
+  /** Exercise ids worked through per lesson. */
+  exerciseCompletions: Record<string, string[]>;
   /** completed milestone keys per module project id */
   projectMilestones: Record<string, string[]>;
   lastVisited?: string;
@@ -49,6 +53,8 @@ type Context = LocalState & {
   /** True once persisted state has loaded — use before restoring per-lesson UI. */
   hydrated: boolean;
   setProgress: (id: string, state: ProgressState) => void;
+  toggleLessonComplete: (id: string) => void;
+  resetLesson: (id: string, projectId?: string) => void;
   /** Advance progress through the monotonic engine ladder from a learning event. */
   applyEvent: (id: string, event: ProgressEvent) => void;
   toggleBookmark: (id: string) => void;
@@ -56,21 +62,25 @@ type Context = LocalState & {
   setStage: (id: string, stage: string) => void;
   recordEvidence: (id: string, patch: Partial<LessonEvidence>) => void;
   getEvidence: (id: string) => LessonEvidence;
+  getExerciseCompletions: (id: string) => string[];
+  markExerciseComplete: (id: string, exerciseId: string) => void;
   /** Completed milestone keys for a module project. */
   getMilestones: (projectId: string) => string[];
   /** Toggle a single project milestone's completion. */
   toggleMilestone: (projectId: string, milestone: string) => void;
   /** Weighted 0-100 mastery score derived from a lesson's captured evidence. */
-  masteryScoreFor: (id: string) => number;
+  masteryScoreFor: (id: string, requiredCriteria?: string[]) => number;
 };
 
 const LearningContext = createContext<Context | null>(null);
 const initial: LocalState = {
   progress: {},
+  completedLessons: [],
   bookmarks: [],
   notes: {},
   stages: {},
   evidence: {},
+  exerciseCompletions: {},
   projectMilestones: {},
 };
 
@@ -80,8 +90,10 @@ function hydrate(raw: string): LocalState {
   return {
     ...initial,
     ...parsed,
+    completedLessons: parsed.completedLessons ?? [],
     stages: parsed.stages ?? {},
     evidence: parsed.evidence ?? {},
+    exerciseCompletions: parsed.exerciseCompletions ?? {},
     projectMilestones: parsed.projectMilestones ?? {},
   };
 }
@@ -134,6 +146,37 @@ export function LearningProvider({
       hydrated,
       setProgress: (id, progress) =>
         setState((s) => ({ ...s, progress: { ...s.progress, [id]: progress }, lastVisited: id })),
+      toggleLessonComplete: (id) =>
+        setState((s) => ({
+          ...s,
+          completedLessons: s.completedLessons.includes(id)
+            ? s.completedLessons.filter((lessonId) => lessonId !== id)
+            : [...s.completedLessons, id],
+          lastVisited: id,
+        })),
+      resetLesson: (id, projectId) =>
+        setState((s) => {
+          const progress = { ...s.progress };
+          const stages = { ...s.stages };
+          const evidence = { ...s.evidence };
+          const exerciseCompletions = { ...s.exerciseCompletions };
+          const projectMilestones = { ...s.projectMilestones };
+          delete progress[id];
+          delete stages[id];
+          delete evidence[id];
+          delete exerciseCompletions[id];
+          if (projectId) delete projectMilestones[projectId];
+          return {
+            ...s,
+            progress,
+            stages,
+            evidence,
+            exerciseCompletions,
+            projectMilestones,
+            completedLessons: s.completedLessons.filter((lessonId) => lessonId !== id),
+            lastVisited: id,
+          };
+        }),
       applyEvent: (id, event) =>
         setState((s) => {
           const current = s.progress[id] ?? "not_started";
@@ -165,6 +208,17 @@ export function LearningProvider({
           };
         }),
       getEvidence,
+      getExerciseCompletions: (id) => state.exerciseCompletions[id] ?? [],
+      markExerciseComplete: (id, exerciseId) =>
+        setState((s) => {
+          const completed = s.exerciseCompletions[id] ?? [];
+          if (completed.includes(exerciseId)) return s;
+          return {
+            ...s,
+            exerciseCompletions: { ...s.exerciseCompletions, [id]: [...completed, exerciseId] },
+            lastVisited: id,
+          };
+        }),
       getMilestones: (projectId) => state.projectMilestones[projectId] ?? [],
       toggleMilestone: (projectId, milestone) =>
         setState((s) => {
@@ -174,9 +228,11 @@ export function LearningProvider({
             : [...done, milestone];
           return { ...s, projectMilestones: { ...s.projectMilestones, [projectId]: next } };
         }),
-      masteryScoreFor: (id) => {
+      masteryScoreFor: (id, requiredCriteria = []) => {
         const e = state.evidence[id] ?? emptyEvidence;
-        const verified = Object.values(e.criteria).length > 0 && Object.values(e.criteria).every(Boolean);
+        const verified =
+          requiredCriteria.length > 0 &&
+          requiredCriteria.every((criterionId) => Boolean(e.criteria[criterionId]));
         return masteryScore({
           explanation: e.explanationReviewed,
           mentalModel: e.mentalModel,
