@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Clock3,
   Focus,
+  Library,
   Lightbulb,
   ListTree,
   Menu,
@@ -329,6 +330,72 @@ function CommandPalette({
   );
 }
 
+const resourceKindOrder = ["playground", "doc", "article", "repo", "video", "course", "book", "tool"];
+const resourceKindLabel: Record<string, string> = {
+  playground: "Interactive & playgrounds",
+  doc: "Documentation",
+  article: "Articles & blogs",
+  repo: "Repositories",
+  video: "Videos & talks",
+  course: "Courses",
+  book: "Books",
+  tool: "Tools",
+};
+const presentResourceKinds = resourceKindOrder.filter((k) => goResources.some((r) => r.kind === k));
+
+/** Dedicated resources destination: curated links grouped by kind, plus per-module references. */
+function ResourcesHub() {
+  const byKind = new Map<string, (typeof goResources)[number][]>();
+  for (const r of goResources) {
+    const list = byKind.get(r.kind);
+    if (list) list.push(r);
+    else byKind.set(r.kind, [r]);
+  }
+  const modulesWithResources = goCurriculum.modules.filter((m) => m.resources.length > 0);
+  return (
+    <div className="resources-hub">
+      <div className="lesson-head">
+        <div>
+          <div className="breadcrumbs">
+            <span>GO RUNTIME LAB</span>
+            <ChevronRight size={12} />
+            <span>RESOURCES</span>
+          </div>
+          <h1>Resource library</h1>
+          <p>
+            Curated documentation, repositories, and videos for learning Go end to end — plus the references attached
+            to each module.
+          </p>
+          <div className="lesson-meta">
+            <Badge>{goResources.length} curated</Badge>
+            <Badge>{presentResourceKinds.length} categories</Badge>
+          </div>
+        </div>
+      </div>
+      <div className="hub-body">
+        {presentResourceKinds.map((k) => (
+          <section className="hub-group" id={`hub-${k}`} key={k}>
+            <ResourceList items={byKind.get(k) ?? []} title={resourceKindLabel[k] ?? k} />
+          </section>
+        ))}
+        <section className="hub-group" id="hub-modules">
+          <SectionLabel>By module</SectionLabel>
+          <div className="hub-modules">
+            {modulesWithResources.map((m) => (
+              <div className="hub-module" key={m.id}>
+                <h3>
+                  <span>{String(m.order).padStart(2, "0")}</span> {m.title}
+                </h3>
+                <ResourceList items={m.resources} />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export function GoWorkspace(props: { lesson: Lesson; moduleTitle: string }) {
   return (
     <LearningProvider storageKey="go-runtime-lab">
@@ -370,6 +437,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   const [panel, setPanel] = useState<"nav" | "toc" | null>(null);
   const [doneExercises, setDoneExercises] = useState(new Set<string>());
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
 
   const sectionRefs = useRef(new Map<StageId, HTMLElement>());
   const restored = useRef(false);
@@ -476,29 +544,32 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     return () => observer.disconnect();
   }, [renderedStages, isLessonView]);
 
-  // On topic change: scroll to a pending stage (search into a stage) if one is queued,
-  // otherwise reset to the top of the column. Poll for the section ref so we scroll only
-  // once the freshly mounted lesson sections exist (the editor section mounts late).
+  // On topic change: reset to the top of the column — unless a stage scroll is queued.
   useEffect(() => {
-    const target = pendingStage.current;
-    if (target) {
-      pendingStage.current = null;
-      let tries = 0;
-      const tryScroll = () => {
-        const el = sectionRefs.current.get(target);
-        if (el) {
-          setActiveStage(target);
-          el.scrollIntoView({ block: "start" });
-        } else if (tries++ < 30) {
-          requestAnimationFrame(tryScroll);
-        }
-      };
-      requestAnimationFrame(tryScroll);
-      return;
-    }
+    if (pendingStage.current) return;
     document.getElementById("lesson-content")?.scrollTo({ top: 0 });
     window.scrollTo({ top: 0 });
   }, [selectedTopicId]);
+
+  // Fulfil a queued stage scroll (search into a stage) once the lesson view is active and
+  // its sections have mounted. Polls for the ref so it also works after leaving a preview
+  // or the resources hub (the editor section mounts late).
+  useEffect(() => {
+    const target = pendingStage.current;
+    if (!target) return;
+    pendingStage.current = null;
+    let tries = 0;
+    const tryScroll = () => {
+      const el = sectionRefs.current.get(target);
+      if (el) {
+        setActiveStage(target);
+        el.scrollIntoView({ block: "start" });
+      } else if (tries++ < 30) {
+        requestAnimationFrame(tryScroll);
+      }
+    };
+    requestAnimationFrame(tryScroll);
+  }, [selectedTopicId, resourcesOpen]);
 
   // ⌘K / Ctrl-K toggles the command palette.
   useEffect(() => {
@@ -514,6 +585,12 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
 
   const selectTopic = (id: string) => {
     setSelectedTopicId(id);
+    setResourcesOpen(false);
+    setPanel(null);
+  };
+
+  const openResources = () => {
+    setResourcesOpen(true);
     setPanel(null);
   };
 
@@ -523,15 +600,16 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     setPanel(null);
   };
 
-  // From search: a stage belongs to the authored lesson, so switch into it first if needed.
-  // Queue the target so the topic-change effect scrolls to it instead of resetting to top.
+  // From search: a stage belongs to the authored lesson, so switch into the lesson view
+  // first if we're in a preview or the resources hub, queuing the target scroll.
   const goToStageFromSearch = (id: StageId) => {
-    if (isLessonView) {
+    if (isLessonView && !resourcesOpen) {
       scrollToStage(id);
       return;
     }
     pendingStage.current = id;
-    setSelectedTopicId(lessonTopicId);
+    setResourcesOpen(false);
+    if (!isLessonView) setSelectedTopicId(lessonTopicId);
   };
 
   const submitMastery = () => {
@@ -883,6 +961,13 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
           <ProgressRing value={score} label="Evidence score" />
           <p className="ring-caption">Mastery evidence collected</p>
         </div>
+        <button
+          className={resourcesOpen ? "hub-trigger active" : "hub-trigger"}
+          aria-current={resourcesOpen ? "page" : undefined}
+          onClick={openResources}
+        >
+          <Library size={15} /> Resource library
+        </button>
         <nav className="module-tree" aria-label="Course modules">
           {goCurriculum.modules.map((module) => (
             <div className="module-group" key={module.id}>
@@ -918,9 +1003,11 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
         </nav>
       </aside>
 
-      {/* CENTER — the authored lesson (stacked, scroll-spied) or a topic preview */}
+      {/* CENTER — resources hub, the authored lesson (scroll-spied), or a topic preview */}
       <main id="lesson-content" className="concept-workspace">
-        {isLessonView ? (
+        {resourcesOpen ? (
+          <ResourcesHub />
+        ) : isLessonView ? (
           <>
             <div className="reading-progress" aria-hidden>
               <i style={{ width: `${((Math.max(activeIndex, 0) + 1) / renderedStages.length) * 100}%` }} />
@@ -1001,12 +1088,34 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       {/* RIGHT — stage outline (lesson) or topic context (preview) */}
       <aside className="page-toc-panel" id="toc-panel" aria-label="Table of contents">
         <div className="panel-close-row">
-          <SectionLabel>{isLessonView ? "On this page" : "About this topic"}</SectionLabel>
+          <SectionLabel>
+            {resourcesOpen ? "Categories" : isLessonView ? "On this page" : "About this topic"}
+          </SectionLabel>
           <button className="panel-close" aria-label="Close contents" onClick={() => setPanel(null)}>
             <X size={16} />
           </button>
         </div>
-        {isLessonView ? (
+        {resourcesOpen ? (
+          <nav className="page-toc" aria-label="Resource categories">
+            {presentResourceKinds.map((k) => (
+              <button
+                key={k}
+                onClick={() =>
+                  document.getElementById(`hub-${k}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+              >
+                <span className="toc-title">{resourceKindLabel[k] ?? k}</span>
+              </button>
+            ))}
+            <button
+              onClick={() =>
+                document.getElementById("hub-modules")?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              <span className="toc-title">By module</span>
+            </button>
+          </nav>
+        ) : isLessonView ? (
           <nav className="page-toc" aria-label="Lesson stages">
             {renderedStages.map(([id, number, label]) => (
               <button
