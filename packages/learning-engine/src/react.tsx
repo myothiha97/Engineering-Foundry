@@ -21,6 +21,7 @@ export type LessonEvidence = {
   mentalModel: boolean;
   predictionCorrect: boolean;
   exercisePassed: boolean;
+  projectApplied: boolean;
   /** mastery-criterion id -> attested */
   criteria: Record<string, boolean>;
 };
@@ -30,6 +31,7 @@ export const emptyEvidence: LessonEvidence = {
   mentalModel: false,
   predictionCorrect: false,
   exercisePassed: false,
+  projectApplied: false,
   criteria: {},
 };
 
@@ -237,7 +239,7 @@ export function LearningProvider({
           explanation: e.explanationReviewed,
           mentalModel: e.mentalModel,
           exercise: e.exercisePassed,
-          project: false,
+          project: Boolean(e.projectApplied),
           verification: verified,
         });
       },

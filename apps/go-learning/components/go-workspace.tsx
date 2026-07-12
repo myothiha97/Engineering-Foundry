@@ -713,6 +713,16 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct: true });
   };
 
+  const toggleProjectMilestone = (key: string) => {
+    if (!selectedModule?.project) return;
+    const current = getMilestones(selectedModule.id);
+    const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
+    const projectApplied = next.length === selectedModule.project.milestones.length;
+    toggleMilestone(selectedModule.id, key);
+    recordEvidence(lesson.id, { projectApplied });
+    if (projectApplied) applyEvent(lesson.id, { type: "APPLY_PROJECT" });
+  };
+
   const resetCurrentLesson = () => {
     const confirmed = window.confirm(
       "Reset this lesson's progress, evidence, exercises, and project milestones? Your note and bookmark will be kept.",
@@ -868,7 +878,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             <ProjectPanel
               project={selectedModule.project}
               completed={getMilestones(selectedModule.id)}
-              onToggle={(key) => toggleMilestone(selectedModule.id, key)}
+              onToggle={toggleProjectMilestone}
             />
           )}
         </div>
