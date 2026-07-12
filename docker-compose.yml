@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: learning
+      POSTGRES_PASSWORD: learning
+      POSTGRES_DB: engineering_learning
+    ports: ["5432:5432"]
+    volumes: ["learning-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U learning -d engineering_learning"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  go-learning:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args: { APP: "@platform/go-learning", APP_DIR: "go-learning" }
+    env_file: .env
+    environment:
+      { DATABASE_URL: "postgresql://learning:learning@postgres:5432/engineering_learning" }
+    ports: ["3000:3000"]
+    depends_on: { postgres: { condition: service_healthy } }
+  backend-learning:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args: { APP: "@platform/backend-learning", APP_DIR: "backend-learning" }
+    command: ["node", "apps/backend-learning/server.js"]
+    env_file: .env
+    environment:
+      {
+        DATABASE_URL: "postgresql://learning:learning@postgres:5432/engineering_learning",
+        PORT: "3001",
+      }
+    ports: ["3001:3001"]
+    depends_on: { postgres: { condition: service_healthy } }
+volumes: { learning-data: {} }

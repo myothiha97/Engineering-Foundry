@@ -1,0 +1,19 @@
+node_modules
+.corepack
+.playwright-cli
+.next
+.turbo
+dist
+coverage
+playwright-report
+test-results
+.env
+.env.local
+*.tsbuildinfo
+.DS_Store
+
+# Go backend lives in its own repo (deployed to AWS)
+/services/
+
+# Local build/screenshot artifacts
+/output/
