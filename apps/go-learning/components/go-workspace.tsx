@@ -55,15 +55,20 @@ const stageMeta = [
 ] as const;
 type StageId = (typeof stageMeta)[number][0];
 
-/** Stages that always render because they carry an interactive widget, even with no prose. */
-const widgetStages = new Set<StageId>([
-  "diagram",
-  "experiment",
-  "implementation",
-  "exercises",
-  "mastery",
-  "summary",
-]);
+/**
+ * Stages that always render for every lesson because they carry a data-driven
+ * widget (built from the lesson's own exercises/criteria), even with no prose.
+ */
+const baseWidgetStages: StageId[] = ["exercises", "mastery", "summary"];
+
+/**
+ * The one lesson with bespoke, hand-built interactive widgets (the compile
+ * pipeline diagram, the init-order experiment, and the runtime.Version editor).
+ * Every other lesson renders its diagram/experiment/implementation stages from
+ * its own authored content blocks instead.
+ */
+const bespokeWidgetLessonId = "go-source-to-process";
+const bespokeWidgetStages: StageId[] = ["diagram", "experiment", "implementation"];
 
 const pipeline: DiagramNode[] = [
   {
@@ -459,7 +464,7 @@ function ResourcesHub() {
   );
 }
 
-export function GoWorkspace(props: { lesson: Lesson; moduleTitle: string }) {
+export function GoWorkspace(props: { lessons: Lesson[] }) {
   return (
     <LearningProvider storageKey="go-runtime-lab">
       <Workspace {...props} />
@@ -467,7 +472,7 @@ export function GoWorkspace(props: { lesson: Lesson; moduleTitle: string }) {
   );
 }
 
-function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
+function Workspace({ lessons }: { lessons: Lesson[] }) {
   const {
     progress,
     completedLessons,
@@ -490,12 +495,19 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
     masteryScoreFor,
   } = useLearning();
 
-  // The catalog topic that maps to the one authored lesson — the default selection.
+  // Registry of every authored lesson, keyed by id, for opening any topic.
+  const lessonsById = useMemo(
+    () => new Map(lessons.map((l) => [l.id, l])),
+    [lessons],
+  );
+
+  // The default selection: the first authored topic in curriculum order.
   const lessonTopicId = useMemo(() => {
     for (const m of goCurriculum.modules)
-      for (const t of m.topics) if (t.lessonId === lesson.id) return t.id;
+      for (const t of m.topics)
+        if (t.status === "authored" && t.lessonId && lessonsById.has(t.lessonId)) return t.id;
     return goCurriculum.modules[0]?.topics[0]?.id ?? "";
-  }, [lesson.id]);
+  }, [lessonsById]);
 
   const [selectedTopicId, setSelectedTopicId] = useState(lessonTopicId);
   const [activeStage, setActiveStage] = useState<StageId>("problem");
@@ -514,33 +526,51 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
 
   const selectedTopic = topicIndex.get(selectedTopicId);
   const selectedModule = goCurriculum.modules.find((m) => m.id === selectedTopic?.moduleId);
-  const isLessonView = Boolean(selectedTopic?.lessonId && selectedTopic.lessonId === lesson.id);
+
+  // The lesson currently open, derived from the selected topic. Undefined while a
+  // planned/preview topic is selected — the whole lesson UI is gated on it.
+  const lesson = selectedTopic?.lessonId ? lessonsById.get(selectedTopic.lessonId) : undefined;
+  const isLessonView = Boolean(lesson);
+  const hasBespokeWidgets = lesson?.id === bespokeWidgetLessonId;
+
+  // Widget stages are per-lesson: every lesson gets the data-driven exercises/
+  // mastery/summary widgets; only the source-to-process lesson gets the bespoke
+  // interactive diagram/experiment/editor widgets.
+  const widgetStages = useMemo(() => {
+    const set = new Set<StageId>(baseWidgetStages);
+    if (hasBespokeWidgets) for (const id of bespokeWidgetStages) set.add(id);
+    return set;
+  }, [hasBespokeWidgets]);
 
   // Only render stages that have authored content or an interactive widget — empty prose
   // stages are skipped so the continuous page never shows a bare heading (data-driven).
   const renderedStages = useMemo(
     () =>
-      stageMeta.filter(([id]) => {
-        if (widgetStages.has(id)) return true;
-        const c = normalizeStage(lesson.sections[id]);
-        return Boolean(
-          c.body?.trim() || c.blocks?.length || c.example || c.scenario || c.keyPoints?.length,
-        );
-      }),
-    [lesson],
+      lesson
+        ? stageMeta.filter(([id]) => {
+            if (widgetStages.has(id)) return true;
+            const c = normalizeStage(lesson.sections[id]);
+            return Boolean(
+              c.body?.trim() || c.blocks?.length || c.example || c.scenario || c.keyPoints?.length,
+            );
+          })
+        : [],
+    [lesson, widgetStages],
   );
 
-  const state = progress[lesson.id] ?? "not_started";
-  const evidence = getEvidence(lesson.id);
-  const requiredCriteria = lesson.masteryCriteria.filter((criterion) => criterion.required);
+  const state = lesson ? (progress[lesson.id] ?? "not_started") : "not_started";
+  const evidence = getEvidence(lesson?.id ?? "");
+  const requiredCriteria = lesson
+    ? lesson.masteryCriteria.filter((criterion) => criterion.required)
+    : [];
   const score = masteryScoreFor(
-    lesson.id,
+    lesson?.id ?? "",
     requiredCriteria.map((criterion) => criterion.id),
   );
-  const completed = completedLessons.includes(lesson.id);
-  const completedExercises = new Set(getExerciseCompletions(lesson.id));
+  const completed = lesson ? completedLessons.includes(lesson.id) : false;
+  const completedExercises = new Set(lesson ? getExerciseCompletions(lesson.id) : []);
   const authoredLessonIds = allTopics(goCurriculum)
-    .filter((topic) => topic.status === "authored" && topic.lessonId)
+    .filter((topic) => topic.status === "authored" && topic.lessonId && lessonsById.has(topic.lessonId))
     .map((topic) => topic.lessonId!);
   const completedAuthoredLessons = authoredLessonIds.filter((id) =>
     completedLessons.includes(id),
@@ -555,13 +585,22 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
 
   // Opening the lesson counts as engagement (not_started -> in_progress).
   useEffect(() => {
-    if (hydrated) applyEvent(lesson.id, { type: "OPEN" });
+    if (hydrated && lesson) applyEvent(lesson.id, { type: "OPEN" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, lesson.id]);
+  }, [hydrated, lesson?.id]);
+
+  // Switching to another lesson resets per-lesson view state so scroll-depth
+  // evidence re-arms and the reader starts at the top of the new lesson.
+  useEffect(() => {
+    firedRef.current.clear();
+    setActiveStage("problem");
+    setPrediction(undefined);
+    setRevealed(false);
+  }, [lesson?.id]);
 
   // Restore the last-viewed section on reload by scrolling to it.
   useEffect(() => {
-    if (!hydrated || restored.current || !isLessonView) return;
+    if (!hydrated || restored.current || !isLessonView || !lesson) return;
     restored.current = true;
     const saved = stages[lesson.id];
     if (saved && renderedStages.some(([id]) => id === saved)) {
@@ -570,18 +609,18 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
         sectionRefs.current.get(saved as StageId)?.scrollIntoView({ block: "start" }),
       );
     }
-  }, [hydrated, stages, lesson.id, renderedStages, isLessonView]);
+  }, [hydrated, stages, lesson?.id, renderedStages, isLessonView]);
 
   // Persist the active section as the learner scrolls (the engine debounces the write).
   useEffect(() => {
-    if (hydrated && isLessonView) setStage(lesson.id, activeStage);
+    if (hydrated && isLessonView && lesson) setStage(lesson.id, activeStage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStage, hydrated, lesson.id, isLessonView]);
+  }, [activeStage, hydrated, lesson?.id, isLessonView]);
 
   // Evidence re-homed from the old "Continue" button onto scroll depth: reaching the
   // mental-model section attests the model; reaching the summary attests review.
   useEffect(() => {
-    if (!isLessonView) return;
+    if (!isLessonView || !lesson) return;
     const mentalIdx = renderedStages.findIndex(([id]) => id === "mental-model");
     const anchorMental =
       mentalIdx >= 0 ? mentalIdx : renderedStages.findIndex(([id]) => id === "diagram");
@@ -597,7 +636,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       applyEvent(lesson.id, { type: "REVIEW_EXPLANATION" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndex, renderedStages, lesson.id, isLessonView]);
+  }, [activeIndex, renderedStages, lesson?.id, isLessonView]);
 
   // Scroll-spy: highlight the section closest to the top of the viewport. Re-runs when the
   // view flips so it re-observes freshly mounted section nodes.
@@ -703,18 +742,20 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   };
 
   const submitMastery = () => {
+    if (!lesson) return;
     recordEvidence(lesson.id, { explanationReviewed: true });
     applyEvent(lesson.id, { type: "VERIFY_MASTERY", passed: true });
   };
 
   const completeExercise = (id: string) => {
+    if (!lesson) return;
     markExerciseComplete(lesson.id, id);
     recordEvidence(lesson.id, { exercisePassed: true });
     applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct: true });
   };
 
   const toggleProjectMilestone = (key: string) => {
-    if (!selectedModule?.project) return;
+    if (!lesson || !selectedModule?.project) return;
     const current = getMilestones(selectedModule.id);
     const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
     const projectApplied = next.length === selectedModule.project.milestones.length;
@@ -724,6 +765,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
   };
 
   const resetCurrentLesson = () => {
+    if (!lesson) return;
     const confirmed = window.confirm(
       "Reset this lesson's progress, evidence, exercises, and project milestones? Your note and bookmark will be kept.",
     );
@@ -743,7 +785,8 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
 
   /** Interactive widget rendered inside a stage's section (below its prose). */
   const renderWidget = (id: StageId) => {
-    if (id === "diagram") {
+    if (!lesson) return null;
+    if (hasBespokeWidgets && id === "diagram") {
       return (
         <div className="diagram-shell">
           <FlowDiagram nodes={pipeline} onSelect={setInspectorNode} />
@@ -772,7 +815,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       );
     }
 
-    if (id === "experiment") {
+    if (hasBespokeWidgets && id === "experiment") {
       return (
         <div className="experiment">
           <div className="experiment-head">
@@ -819,7 +862,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       );
     }
 
-    if (id === "implementation") {
+    if (hasBespokeWidgets && id === "implementation") {
       return (
         <GoEditor
           starter={lesson.exercises.find((e) => e.type === "implementation")?.starterCode ?? ""}
@@ -1165,7 +1208,7 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
       <main id="lesson-content" className="concept-workspace">
         {resourcesOpen ? (
           <ResourcesHub />
-        ) : isLessonView ? (
+        ) : lesson ? (
           <>
             <div className="reading-progress" aria-hidden>
               <i
@@ -1177,9 +1220,9 @@ function Workspace({ lesson }: { lesson: Lesson; moduleTitle: string }) {
             <div className="lesson-head">
               <div>
                 <div className="breadcrumbs">
-                  <span>GO.00</span>
+                  <span>GO.{String(selectedModule?.order ?? 0).padStart(2, "0")}</span>
                   <ChevronRight size={12} />
-                  <span>FOUNDATION</span>
+                  <span>{(selectedModule?.level ?? "foundation").toUpperCase()}</span>
                 </div>
                 <h1>{lesson.title}</h1>
                 <p>{lesson.description}</p>
