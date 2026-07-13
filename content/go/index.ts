@@ -56,6 +56,14 @@ import {
   goProfilingPprof,
   goModule7,
 } from "./module-7";
+import {
+  goEscapeAnalysisDeep,
+  goGcTuning,
+  goReflection,
+  goUnsafeCgo,
+  goModulesAdvanced,
+  goModule8,
+} from "./module-8";
 
 /**
  * Every authored Go lesson, in curriculum order. The workspace opens any lesson
@@ -101,6 +109,11 @@ export const goLessons: Lesson[] = [
   goMocksFakes,
   goVetCoverage,
   goProfilingPprof,
+  goEscapeAnalysisDeep,
+  goGcTuning,
+  goReflection,
+  goUnsafeCgo,
+  goModulesAdvanced,
 ];
 
 export const goLessonsById: Record<string, Lesson> = Object.fromEntries(
@@ -117,4 +130,5 @@ export const goContentModules: CurriculumModule[] = [
   goModule5,
   goModule6,
   goModule7,
+  goModule8,
 ];
