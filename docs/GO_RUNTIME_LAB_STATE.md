@@ -6,12 +6,34 @@ Last updated: 2026-07-13.
 
 ---
 
+## 0a. PROGRESS UPDATE (2026-07-13, evening) — curriculum complete + FE features landed
+
+Everything below §0 describes the state mid-expansion; as of this update:
+
+- **All 43 lessons authored (modules 0–8).** Module 8 (escape analysis, GC tuning,
+  reflection, unsafe/cgo, modules & versioning) is done. A full content audit fixed a
+  wrong experiment answer (`basic-types` untyped-constant division), a dead reference
+  URL, a bogus env var (`GONOSUMCHECK`), and normalized ~200 British spellings to
+  American English.
+- **Four FE features landed** (see `docs/GO_LAB_FE_COMPLETION_PLAN.md` for specs):
+  per-type interactive exercise cards (commit-before-reveal predictions, CodeMirror
+  editor with deterministic reference checks), `/dashboard`, `/review` (SM-2 spaced
+  queue persisted in the learning engine), `/concepts` (SVG prerequisite graph +
+  text-tree alternative), plus workspace header nav and `/?topic=<id>` deep links.
+- **Still open:** `/account` auth screens (blocked on the Go API per the handoff
+  gate), manual mobile/interaction QA pass, optional readability glosses for
+  frontend-only readers (plan doc §3), repo-wide `pnpm lint` is broken pre-existing
+  (eslint lints `.next/`; flat config missing `react-hooks/exhaustive-deps`).
+
+---
+
 ## 0. PROGRESS UPDATE (2026-07-13) — curriculum expansion in flight
 
 Two big things landed since the 2026-07-12 notes:
 
 **A. Multi-lesson workspace (was single-lesson).** The workspace now opens **any**
 authored lesson, not just Module 0. Key pieces:
+
 - `content/go/index.ts` — the **lesson registry**: `goLessons` (array), `goLessonsById`,
   and `goContentModules` (for referential validation). Each `content/go/module-N/index.ts`
   exports its lessons + a `goModuleN: CurriculumModule`.
@@ -20,7 +42,7 @@ authored lesson, not just Module 0. Key pieces:
   selected topic's `lessonId` via the registry (`lesson` may be `undefined` in preview
   mode — every use is guarded). The bespoke Module-0 widgets (compile-pipeline diagram,
   init-order experiment, runtime.Version editor) are scoped to `bespokeWidgetLessonId =
-  "go-source-to-process"` only; every other lesson renders its `diagram`/`experiment`/
+"go-source-to-process"` only; every other lesson renders its `diagram`/`experiment`/
   `implementation` stages from its own content blocks. `widgetStages` is now per-lesson.
 - `scripts/validate-content.ts` validates `[...goLessons, backendProcessToService]`
   against `[...goContentModules, backendModule0]` — new lessons are picked up automatically.
@@ -65,7 +87,7 @@ same-batch siblings) or validation fails.
 A **comprehensive, reliable Go learning portal**, fundamental → advanced, that someone can use to become a Go engineer:
 
 - **Coverage of all of Go** — everything on https://go.dev/learn and the https://go.dev/doc/ index (tutorials, Effective Go, spec, modules, diagnostics, memory model, GC guide, database/sql, etc.).
-- **Beginner-friendly writing** — plain language, define jargon, analogy + concrete-before-abstract. Calibration confirmed by user: *do not over-simplify*; Module 0's current voice is the target. Length is "ideal" — not too long, not too short.
+- **Beginner-friendly writing** — plain language, define jargon, analogy + concrete-before-abstract. Calibration confirmed by user: _do not over-simplify_; Module 0's current voice is the target. Length is "ideal" — not too long, not too short.
 - **Diagrams woven into explanations** and **multiple code examples** per topic (not just prose).
 - **Lots of resources / references**, including popular **GitHub repos** and quality **videos**, attached per module and in a dedicated resources hub. Reformat authoritative content from official go.dev docs.
 - **Problem-solving first** — exercises/challenges between sessions and **mini-projects per module**; the UI must be designed specifically around doing, not just reading. "Most of the actual learning is in solving problems."
@@ -105,12 +127,19 @@ Delivered:
 8. Small enablers: `code-editor` `onResult` callback; `diagrams` Space-key a11y.
 
 Other:
+
 - `apps/backend-learning/components/backend-workspace.tsx` got a **one-line** type-safety fix only (`normalizeStage(...).body`) — **not redesigned**. Backend is a separate project now.
 - Root `CLAUDE.md` created.
 
 ---
 
 ## 3. Outstanding TODO (prioritized)
+
+> **2026-07-13 UPDATE — this list is stale.** Items 1, 2, 3, 5, 6 below are DONE in code,
+> and all 43 lessons (modules 0–8) are authored. The implementation record for the
+> completed frontend work (interactive exercises, dashboard, review queue, concepts
+> graph, and navigation) is **`docs/GO_LAB_FE_COMPLETION_PLAN.md`**. Remaining work is
+> limited to the backend-dependent account flow, manual QA, and optional follow-ups.
 
 1. **Continuous scroll + scroll-spy (NEW, top priority).** Render all 16 stages stacked in the scrollable center column (each with an `id`). Add an IntersectionObserver so the right outline (and the curriculum) highlight the section currently in view, and clicking the outline smooth-scrolls to it. Replace the current page-by-page swap. Keep evidence hooks (mark reviewed as sections pass).
 2. **Fix the middle empty-gap fully / polish** the confirmed 3-column layout after the scroll change.
@@ -122,6 +151,7 @@ Other:
 8. **Verify end-to-end** after each chunk (typecheck, content:validate, screenshots at the 4 viewports, exercise/mastery/persistence flows).
 
 ### Styling notes
+
 - **Global font size reduced ~10%** — `apps/go-learning/app/globals.css` sets `html { font-size: 90% }` because the user reads at ~90% browser zoom. The app is fully rem-based, so this one knob scales everything uniformly. If further tuning is needed, adjust this value rather than individual rules. (Applied 2026-07-12; verify it renders after a dev restart due to the Turbopack CSS-cache gotcha in §5.)
 
 ---
