@@ -2,7 +2,60 @@
 
 > Scope note: from here on the **Go Runtime Lab** (`apps/go-learning`) and the **Backend Systems Atlas** (`apps/backend-learning`) are treated as **individual projects**. This document covers the Go Runtime Lab only. The Backend Atlas is untouched/deferred except for one type-safety fix noted below.
 
-Last updated: 2026-07-12.
+Last updated: 2026-07-13.
+
+---
+
+## 0. PROGRESS UPDATE (2026-07-13) — curriculum expansion in flight
+
+Two big things landed since the 2026-07-12 notes:
+
+**A. Multi-lesson workspace (was single-lesson).** The workspace now opens **any**
+authored lesson, not just Module 0. Key pieces:
+- `content/go/index.ts` — the **lesson registry**: `goLessons` (array), `goLessonsById`,
+  and `goContentModules` (for referential validation). Each `content/go/module-N/index.ts`
+  exports its lessons + a `goModuleN: CurriculumModule`.
+- `apps/go-learning/app/page.tsx` passes `lessons={goLessons}` (not a single lesson).
+- `apps/go-learning/components/go-workspace.tsx` derives the open `lesson` from the
+  selected topic's `lessonId` via the registry (`lesson` may be `undefined` in preview
+  mode — every use is guarded). The bespoke Module-0 widgets (compile-pipeline diagram,
+  init-order experiment, runtime.Version editor) are scoped to `bespokeWidgetLessonId =
+  "go-source-to-process"` only; every other lesson renders its `diagram`/`experiment`/
+  `implementation` stages from its own content blocks. `widgetStages` is now per-lesson.
+- `scripts/validate-content.ts` validates `[...goLessons, backendProcessToService]`
+  against `[...goContentModules, backendModule0]` — new lessons are picked up automatically.
+
+**B. Modules 0–3 fully authored — 16 Go lessons live.** Modules 0, 1, 2, 3 are complete
+(all topics `status: "authored"` with `lessonId` set, all 16 stages each, Module-0 voice,
+diagrams + multiple examples + 7 exercises + go.dev references). Verified: `content:validate`
+= 16 lessons / 5 modules, `pnpm --filter @platform/go-learning typecheck` clean, all lessons
+open in-app with zero page errors. Each module was committed separately.
+
+**Remaining: Modules 4–8 (24 lessons).** Module 4 authoring was interrupted by a session
+limit before any file was written — the repo is clean and fully committed at Module 3.
+
+### How to resume (proven per-module recipe)
+
+For each remaining module (4: errors/design · 5: stdlib+I/O incl database/sql · 6: concurrency ·
+7: testing/tooling · 8: runtime/performance), repeat:
+
+1. **Draft in parallel:** spawn one subagent per topic (see `packages/curriculum/src/go.ts`
+   for each module's topics, ids, concepts, prerequisites, whyNow, outcome, ledgerFlow).
+   Give each subagent: the exact `Lesson` schema (from `packages/content-schema/src/index.ts`),
+   the voice calibration, Module 0 + a Module 1 lesson as exemplars, and the **schema
+   gotcha** (a block's `title` goes INSIDE its `diagram`/`note`/`example` object, never at
+   the block level). Ask for a file at `content/go/module-N/<slug>.ts` exporting one `Lesson`.
+2. **Pre-wire while they draft:** create `content/go/module-N/index.ts` (re-export lessons +
+   `goModuleN`), add imports/lessons/`goContentModules` entry to `content/go/index.ts`, and
+   flip each topic in `packages/curriculum/src/go.ts` from `status: "planned"` to
+   `status: "authored"` + `lessonId: "..."`.
+3. **Verify:** `pnpm content:validate` + `pnpm --filter @platform/go-learning typecheck`.
+   Spot-review correctness-critical claims (e.g. concurrency race semantics, `database/sql`
+   pooling). Open each lesson in the running app to confirm zero page errors.
+4. **Commit** the module (per-module commit rhythm; no Co-Authored-By line).
+
+Lesson `prerequisites` must reference lesson ids already in `goLessons` (earlier modules or
+same-batch siblings) or validation fails.
 
 ---
 
