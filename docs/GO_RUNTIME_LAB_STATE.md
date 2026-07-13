@@ -25,14 +25,14 @@ authored lesson, not just Module 0. Key pieces:
 - `scripts/validate-content.ts` validates `[...goLessons, backendProcessToService]`
   against `[...goContentModules, backendModule0]` — new lessons are picked up automatically.
 
-**B. Modules 0–3 fully authored — 16 Go lessons live.** Modules 0, 1, 2, 3 are complete
+**B. Modules 0–6 fully authored — 32 Go lessons live.** Modules 0–6 are complete
 (all topics `status: "authored"` with `lessonId` set, all 16 stages each, Module-0 voice,
-diagrams + multiple examples + 7 exercises + go.dev references). Verified: `content:validate`
-= 16 lessons / 5 modules, `pnpm --filter @platform/go-learning typecheck` clean, all lessons
-open in-app with zero page errors. Each module was committed separately.
+diagrams + multiple examples + exercises + go.dev references). Verified: `content:validate`
+= 32 lessons / 8 modules, `pnpm --filter @platform/go-learning typecheck` clean. Each module
+was committed separately (Module 6 = commit `094af53`).
 
-**Remaining: Modules 4–8 (24 lessons).** Module 4 authoring was interrupted by a session
-limit before any file was written — the repo is clean and fully committed at Module 3.
+**Remaining: Modules 7–8 (~8 lessons).** 7: testing/tooling · 8: runtime/performance. The
+repo is clean and fully committed at Module 6.
 
 ### How to resume (proven per-module recipe)
 
