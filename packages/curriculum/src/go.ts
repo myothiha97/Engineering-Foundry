@@ -511,7 +511,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Almost all I/O in Go flows through these two interfaces.",
           learnerOutcome: "Compose readers and writers to stream data.",
           ledgerFlowApplication: "Stream large exports without buffering everything.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-io-reader-writer",
         },
         {
           id: "go-files-os",
@@ -522,7 +523,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Programs must read config and files safely.",
           learnerOutcome: "Handle files and env with correct error paths.",
           ledgerFlowApplication: "Load configuration and import files.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-files-os",
         },
         {
           id: "go-json",
@@ -533,7 +535,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "JSON is the lingua franca of services.",
           learnerOutcome: "Model and (de)serialize JSON safely.",
           ledgerFlowApplication: "Encode API responses and decode requests.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-json",
         },
         {
           id: "go-time-context",
@@ -544,7 +547,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Deadlines and cancellation are foundational to servers.",
           learnerOutcome: "Propagate deadlines and cancel work correctly.",
           ledgerFlowApplication: "Bound every request with a context deadline.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-time-context",
         },
         {
           id: "go-net-http",
@@ -555,7 +559,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "HTTP is how most Go services communicate.",
           learnerOutcome: "Build a small HTTP service with middleware.",
           ledgerFlowApplication: "Serve the LedgerFlow API on net/http.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-net-http",
           resources: [
             {
               label: "Writing Web Applications",
@@ -574,7 +579,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Almost every backend service talks to a database; Go's database/sql is the foundation.",
           learnerOutcome: "Query, mutate, and transact safely with database/sql.",
           ledgerFlowApplication: "Persist LedgerFlow transactions with safe, pooled SQL.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-database-sql",
           resources: [
             {
               label: "Tutorial: Accessing a relational database",
