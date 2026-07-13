@@ -9,7 +9,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { masteryScore, transitionProgress, type ProgressEvent, type ProgressState } from "./index";
+import {
+  masteryScore,
+  scheduleReview,
+  transitionProgress,
+  type ProgressEvent,
+  type ProgressState,
+} from "./index";
 
 /**
  * Evidence a learner has produced for a single lesson. This is the anonymous,
@@ -35,6 +41,19 @@ export const emptyEvidence: LessonEvidence = {
   criteria: {},
 };
 
+/**
+ * One lesson's spaced-review schedule (SM-2-style, dates as ISO strings so the
+ * payload stays JSON-serializable). Created when evidence routes a lesson to
+ * needs_review; updated by each review outcome.
+ */
+export type ReviewEntry = {
+  lastReviewedAt: string;
+  intervalDays: number;
+  ease: number;
+  dueAt: string;
+  reason: string;
+};
+
 type LocalState = {
   progress: Record<string, ProgressState>;
   /** Learner-controlled completion, intentionally separate from evidence-backed mastery. */
@@ -48,6 +67,8 @@ type LocalState = {
   exerciseCompletions: Record<string, string[]>;
   /** completed milestone keys per module project id */
   projectMilestones: Record<string, string[]>;
+  /** Spaced-review schedule per lesson id. */
+  reviews: Record<string, ReviewEntry>;
   lastVisited?: string;
 };
 
@@ -70,6 +91,9 @@ type Context = LocalState & {
   getMilestones: (projectId: string) => string[];
   /** Toggle a single project milestone's completion. */
   toggleMilestone: (projectId: string, milestone: string) => void;
+  getReview: (id: string) => ReviewEntry | undefined;
+  /** Record one review attempt: reschedules the entry via the SM-2-style engine. */
+  recordReviewOutcome: (id: string, correct: boolean) => void;
   /** Weighted 0-100 mastery score derived from a lesson's captured evidence. */
   masteryScoreFor: (id: string, requiredCriteria?: string[]) => number;
 };
@@ -84,6 +108,7 @@ const initial: LocalState = {
   evidence: {},
   exerciseCompletions: {},
   projectMilestones: {},
+  reviews: {},
 };
 
 /** Tolerate older persisted payloads that predate `stages`/`evidence`. */
@@ -97,6 +122,7 @@ function hydrate(raw: string): LocalState {
     evidence: parsed.evidence ?? {},
     exerciseCompletions: parsed.exerciseCompletions ?? {},
     projectMilestones: parsed.projectMilestones ?? {},
+    reviews: parsed.reviews ?? {},
   };
 }
 
@@ -182,9 +208,31 @@ export function LearningProvider({
       applyEvent: (id, event) =>
         setState((s) => {
           const current = s.progress[id] ?? "not_started";
+          const next = transitionProgress(current, event);
+          // Landing in needs_review seeds (or re-arms) a due-now review entry,
+          // so failed evidence automatically feeds the review queue.
+          let reviews = s.reviews;
+          if (next === "needs_review") {
+            const now = new Date().toISOString();
+            const prev = s.reviews[id];
+            reviews = {
+              ...s.reviews,
+              [id]: {
+                lastReviewedAt: now,
+                intervalDays: 1,
+                ease: prev?.ease ?? 2.5,
+                dueAt: now,
+                reason:
+                  event.type === "VERIFY_MASTERY"
+                    ? "mastery verification failed"
+                    : "incorrect answer",
+              },
+            };
+          }
           return {
             ...s,
-            progress: { ...s.progress, [id]: transitionProgress(current, event) },
+            progress: { ...s.progress, [id]: next },
+            reviews,
             lastVisited: id,
           };
         }),
@@ -218,6 +266,32 @@ export function LearningProvider({
           return {
             ...s,
             exerciseCompletions: { ...s.exerciseCompletions, [id]: [...completed, exerciseId] },
+            lastVisited: id,
+          };
+        }),
+      getReview: (id) => state.reviews[id],
+      recordReviewOutcome: (id, correct) =>
+        setState((s) => {
+          const prev = s.reviews[id];
+          const now = new Date();
+          const next = scheduleReview({
+            lastReviewedAt: now,
+            intervalDays: prev?.intervalDays ?? 1,
+            ease: prev?.ease ?? 2.5,
+            correct,
+          });
+          return {
+            ...s,
+            reviews: {
+              ...s.reviews,
+              [id]: {
+                lastReviewedAt: now.toISOString(),
+                intervalDays: next.intervalDays,
+                ease: next.ease,
+                dueAt: next.dueAt.toISOString(),
+                reason: prev?.reason ?? "scheduled review",
+              },
+            },
             lastVisited: id,
           };
         }),
