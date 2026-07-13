@@ -47,6 +47,15 @@ import {
   goConcurrencyPatterns,
   goModule6,
 } from "./module-6";
+import {
+  goUnitTableTests,
+  goBenchmarks,
+  goFuzzing,
+  goMocksFakes,
+  goVetCoverage,
+  goProfilingPprof,
+  goModule7,
+} from "./module-7";
 
 /**
  * Every authored Go lesson, in curriculum order. The workspace opens any lesson
@@ -86,6 +95,12 @@ export const goLessons: Lesson[] = [
   goContextCancellation,
   goRacesDetector,
   goConcurrencyPatterns,
+  goUnitTableTests,
+  goBenchmarks,
+  goFuzzing,
+  goMocksFakes,
+  goVetCoverage,
+  goProfilingPprof,
 ];
 
 export const goLessonsById: Record<string, Lesson> = Object.fromEntries(
@@ -101,4 +116,5 @@ export const goContentModules: CurriculumModule[] = [
   goModule4,
   goModule5,
   goModule6,
+  goModule7,
 ];
