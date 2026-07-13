@@ -27,11 +27,14 @@ export function GoEditor({
             onClick={() => {
               setCode(starter);
               setResult(undefined);
+              setShowDiff(false);
             }}
           >
             Reset
           </button>
-          <button onClick={() => setShowDiff((v) => !v)}>Diff</button>
+          <button aria-pressed={showDiff} onClick={() => setShowDiff((v) => !v)}>
+            {showDiff ? "Hide diff" : "Diff"}
+          </button>
           <button
             className="run"
             onClick={() => {
