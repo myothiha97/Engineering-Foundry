@@ -38,6 +38,15 @@ import {
   goDatabaseSql,
   goModule5,
 } from "./module-5";
+import {
+  goGoroutinesScheduler,
+  goChannelsSelect,
+  goSyncAtomic,
+  goContextCancellation,
+  goRacesDetector,
+  goConcurrencyPatterns,
+  goModule6,
+} from "./module-6";
 
 /**
  * Every authored Go lesson, in curriculum order. The workspace opens any lesson
@@ -71,6 +80,12 @@ export const goLessons: Lesson[] = [
   goTimeContext,
   goNetHttp,
   goDatabaseSql,
+  goGoroutinesScheduler,
+  goChannelsSelect,
+  goSyncAtomic,
+  goContextCancellation,
+  goRacesDetector,
+  goConcurrencyPatterns,
 ];
 
 export const goLessonsById: Record<string, Lesson> = Object.fromEntries(
@@ -85,4 +100,5 @@ export const goContentModules: CurriculumModule[] = [
   goModule3,
   goModule4,
   goModule5,
+  goModule6,
 ];

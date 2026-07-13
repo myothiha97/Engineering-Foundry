@@ -659,7 +659,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Goroutines are trivial to start and easy to misuse.",
           learnerOutcome: "Reason about how goroutines are scheduled and block.",
           ledgerFlowApplication: "Process transactions concurrently without oversubscription.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-goroutines-scheduler",
         },
         {
           id: "go-channels-select",
@@ -670,7 +671,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Channels are Go's primary coordination primitive.",
           learnerOutcome: "Coordinate goroutines with channels and select safely.",
           ledgerFlowApplication: "Fan work out and collect results.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-channels-select",
         },
         {
           id: "go-sync-atomic",
@@ -681,7 +683,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Some state is simplest guarded, not passed.",
           learnerOutcome: "Choose between channels and locks deliberately.",
           ledgerFlowApplication: "Protect an in-memory balance cache.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-sync-atomic",
         },
         {
           id: "go-context-cancellation",
@@ -692,7 +695,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Uncancelled goroutines leak and hang shutdowns.",
           learnerOutcome: "Wire cancellation through a goroutine tree.",
           ledgerFlowApplication: "Cancel in-flight work on shutdown.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-context-cancellation",
         },
         {
           id: "go-races-detector",
@@ -703,7 +707,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Races are silent, nondeterministic, and dangerous.",
           learnerOutcome: "Detect and eliminate data races.",
           ledgerFlowApplication: "Prove concurrent balance updates are race-free.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-races-detector",
           resources: [
             {
               label: "The Go Memory Model",
@@ -722,7 +727,8 @@ export const goCurriculum: Curriculum = {
           whyNow: "Patterns turn primitives into reliable systems.",
           learnerOutcome: "Assemble cancellable, leak-free concurrent pipelines.",
           ledgerFlowApplication: "Build a bounded transaction-processing pipeline.",
-          status: "planned",
+          status: "authored",
+          lessonId: "go-concurrency-patterns",
         },
       ],
     },
