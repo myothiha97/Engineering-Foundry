@@ -20,7 +20,7 @@ export const goGoroutinesScheduler: Lesson = {
   learningObjectives: [
     "Start a goroutine with `go f()` and explain why it is far cheaper than an OS thread",
     "Reason about how the runtime scheduler multiplexes goroutines onto threads using the GMP model, and what happens when a goroutine blocks",
-    "Recognise that a program exits when main returns, and wait for outstanding goroutines instead of leaking them",
+    "Recognize that a program exits when main returns, and wait for outstanding goroutines instead of leaking them",
   ],
   concepts: ["goroutines", "scheduler", "GMP", "blocking"],
   ledgerFlowApplications: [
@@ -346,7 +346,7 @@ export const goGoroutinesScheduler: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. Consider this program on a machine where GOMAXPROCS is 1 (only one goroutine can run at a time):\n\n```\nfunc main() {\n    go fmt.Println(\"A\")\n    go fmt.Println(\"B\")\n    fmt.Println(\"main\")\n}\n```\n\nWhat prints, and can you rely on the order? Commit to an answer.\n\nHere's the trace. `main` starts goroutine A, starts goroutine B, then prints \"main\" itself — and then main returns. Even with GOMAXPROCS at 1, the two goroutines are runnable, but main never gave up the thread or waited, so it ran to its end first. When main returns the program exits and A and B are killed. The reliable output is just **main**; \"A\" and \"B\" might occasionally slip in on faster timing, but you cannot count on it. The lesson: order and even *whether* a goroutine runs is not guaranteed unless you synchronise — and GOMAXPROCS controls parallelism, not whether main waits.",
+      body: "Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. Consider this program on a machine where GOMAXPROCS is 1 (only one goroutine can run at a time):\n\n```\nfunc main() {\n    go fmt.Println(\"A\")\n    go fmt.Println(\"B\")\n    fmt.Println(\"main\")\n}\n```\n\nWhat prints, and can you rely on the order? Commit to an answer.\n\nHere's the trace. `main` starts goroutine A, starts goroutine B, then prints \"main\" itself — and then main returns. Even with GOMAXPROCS at 1, the two goroutines are runnable, but main never gave up the thread or waited, so it ran to its end first. When main returns the program exits and A and B are killed. The reliable output is just **main**; \"A\" and \"B\" might occasionally slip in on faster timing, but you cannot count on it. The lesson: order and even *whether* a goroutine runs is not guaranteed unless you synchronize — and GOMAXPROCS controls parallelism, not whether main waits.",
     },
     "failure-cases": {
       body: "The failures here cluster around two misunderstandings: forgetting that main's return kills everything, and confusing cheap-to-create with free-to-run-unbounded. Here are the ones you'll actually meet.",
@@ -355,16 +355,16 @@ export const goGoroutinesScheduler: Lesson = {
           type: "points",
           items: [
             "**Fire-and-forget `go f()`** → main (or the caller) returns before `f` runs; the work is silently lost. Wait with a WaitGroup.",
-            "**Waiting with `time.Sleep`** → a guess, not a guarantee; too short loses work, too long wastes time. Use synchronisation, not sleeps.",
+            "**Waiting with `time.Sleep`** → a guess, not a guarantee; too short loses work, too long wastes time. Use synchronization, not sleeps.",
             "**Unbounded goroutines** → 100,000 goroutines each grabbing a scarce resource (a DB connection) oversubscribes it and thrashes. Cap concurrency.",
             "**Assuming an order** → the scheduler makes no promise about which runnable goroutine goes first. If you need order, coordinate it.",
-            "**Expecting a shared variable to be safe** → two goroutines touching the same variable without synchronisation is a data race (that's the mutexes/channels lesson).",
+            "**Expecting a shared variable to be safe** → two goroutines touching the same variable without synchronization is a data race (that's the mutexes/channels lesson).",
           ],
         },
         {
           type: "example",
           example: {
-            title: "Sleep is not synchronisation",
+            title: "Sleep is not synchronization",
             language: "go",
             code:
               'func main() {\n    go doWork()\n    time.Sleep(100 * time.Millisecond) // HOPE it finished in time — it might not\n}\n\n// Correct: actually wait for it.\nfunc main() {\n    var wg sync.WaitGroup\n    wg.Add(1)\n    go func() { defer wg.Done(); doWork() }()\n    wg.Wait() // guaranteed: doWork has finished\n}',

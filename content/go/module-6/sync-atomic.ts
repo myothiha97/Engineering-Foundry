@@ -20,7 +20,7 @@ export const goSyncAtomic: Lesson = {
   difficulty: "advanced",
   prerequisites: ["go-goroutines-scheduler"],
   learningObjectives: [
-    "Recognise an unsynchronised shared-state data race and explain why it is undefined behaviour, not just a wrong number",
+    "Recognize an unsynchronized shared-state data race and explain why it is undefined behavior, not just a wrong number",
     "Protect an invariant across one or more fields with sync.Mutex and sync.RWMutex, using defer Unlock and never copying the lock",
     "Use sync/atomic for a single-word counter or flag and know exactly where an atomic is not enough",
     "Choose deliberately between passing a value over a channel and guarding shared memory with a lock",
@@ -59,8 +59,8 @@ export const goSyncAtomic: Lesson = {
     {
       title: "The Go Memory Model",
       url: "https://go.dev/ref/mem",
-      teaches: "The formal rules for when one goroutine's write is guaranteed visible to another, via synchronising operations.",
-      relevance: "Explains why an unsynchronised read may never see another goroutine's write — the root of the race.",
+      teaches: "The formal rules for when one goroutine's write is guaranteed visible to another, via synchronizing operations.",
+      relevance: "Explains why an unsynchronized read may never see another goroutine's write — the root of the race.",
       required: false,
       section: "Synchronization",
     },
@@ -72,7 +72,7 @@ export const goSyncAtomic: Lesson = {
       prompt:
         "1,000 goroutines each run `counter++` on a shared unprotected `int`, and main waits for all of them with a WaitGroup before printing counter. Predict what counter prints and whether it is reliable.",
       expectedAnswer:
-        "It usually prints some number less than 1,000, and different runs print different numbers. `counter++` is a read-modify-write (load, add one, store) that is not atomic, so two goroutines can read the same value and both write back the same increment, losing updates. It is a data race — undefined behaviour — so no value is guaranteed; `go run -race` flags it.",
+        "It usually prints some number less than 1,000, and different runs print different numbers. `counter++` is a read-modify-write (load, add one, store) that is not atomic, so two goroutines can read the same value and both write back the same increment, losing updates. It is a data race — undefined behavior — so no value is guaranteed; `go run -race` flags it.",
       hints: [
         "`counter++` is three steps (read, add, write), not one indivisible step.",
         "Two goroutines can both read the same old value and both store old+1, so one increment is lost.",
@@ -148,7 +148,7 @@ export const goSyncAtomic: Lesson = {
       id: "explain-race",
       kind: "explain",
       description:
-        "Explain, without notes, why unsynchronised concurrent access to shared state is a data race and undefined behaviour, using `counter++` as the example.",
+        "Explain, without notes, why unsynchronized concurrent access to shared state is a data race and undefined behavior, using `counter++` as the example.",
       required: true,
     },
     {
@@ -220,7 +220,7 @@ export const goSyncAtomic: Lesson = {
       ],
     },
     failure: {
-      body: "It's worse than a wrong number. A data race in Go is officially **undefined behaviour**: the language makes no promise about what a racy program does. The Go **memory model** says that without a synchronising operation between them, one goroutine's write is not guaranteed to ever become *visible* to another. The compiler and CPU are free to keep a value in a register, reorder instructions, or cache it — optimisations that are perfectly safe for single-goroutine code but poison across goroutines.\n\nSo the failure isn't only \"the count is off by a few.\" It can be a loop that spins forever because it never re-reads a flag, a map that corrupts its internal structure and panics, or a value that's briefly torn between two writes. Go ships a **race detector** (`go run -race`, `go test -race`) precisely because these bugs are invisible to the eye and to ordinary tests.",
+      body: "It's worse than a wrong number. A data race in Go is officially **undefined behavior**: the language makes no promise about what a racy program does. The Go **memory model** says that without a synchronizing operation between them, one goroutine's write is not guaranteed to ever become *visible* to another. The compiler and CPU are free to keep a value in a register, reorder instructions, or cache it — optimizations that are perfectly safe for single-goroutine code but poison across goroutines.\n\nSo the failure isn't only \"the count is off by a few.\" It can be a loop that spins forever because it never re-reads a flag, a map that corrupts its internal structure and panics, or a value that's briefly torn between two writes. Go ships a **race detector** (`go run -race`, `go test -race`) precisely because these bugs are invisible to the eye and to ordinary tests.",
       blocks: [
         {
           type: "scenario",
@@ -229,7 +229,7 @@ export const goSyncAtomic: Lesson = {
             context:
               "A LedgerFlow request handler keeps an in-memory `map[string]int64` of account balances. Under load, handlers read and write the map concurrently with no lock. In testing it's fine. In production it intermittently returns a balance that's seconds out of date, and once a week it crashes with `fatal error: concurrent map read and map write`.",
             insight:
-              "A Go map is not safe for concurrent use — a simultaneous read and write can corrupt its internal buckets, which is why the runtime aborts hard. And without synchronisation, a reader may never see a writer's update at all. The fix is to guard every access to the map with the same lock.",
+              "A Go map is not safe for concurrent use — a simultaneous read and write can corrupt its internal buckets, which is why the runtime aborts hard. And without synchronization, a reader may never see a writer's update at all. The fix is to guard every access to the map with the same lock.",
           },
         },
         {
@@ -237,7 +237,7 @@ export const goSyncAtomic: Lesson = {
           note: {
             tone: "warning",
             title: "Run the race detector",
-            text: "`go run -race ./...` and `go test -race ./...` instrument your program to catch data races at runtime. It's the single most valuable habit for concurrent Go. A race the detector reports is a real bug even if the program 'works' today — undefined behaviour is a time bomb.",
+            text: "`go run -race ./...` and `go test -race ./...` instrument your program to catch data races at runtime. It's the single most valuable habit for concurrent Go. A race the detector reports is a real bug even if the program 'works' today — undefined behavior is a time bomb.",
           },
         },
       ],
@@ -264,7 +264,7 @@ export const goSyncAtomic: Lesson = {
       ],
     },
     "mental-model": {
-      body: "Reduce the sync tools to a small set of shapes and they stop surprising you.\n\n**`sync.Mutex`** — one key, one holder. Use it when you must protect an *invariant across one or more fields*: \"the map and its size counter must always agree,\" \"these two balances must sum to a constant.\" A mutex is the general answer.\n\n**`sync.RWMutex`** — a smarter lock with two modes: *many readers* (`RLock`) may hold it at once, XOR *one writer* (`Lock`) holds it alone. It only helps when reads vastly outnumber writes, because readers no longer block each other.\n\n**`sync/atomic`** — hardware-level indivisible operations on a *single word* (an `int64`, a pointer). `atomic.Int64` with `Add`, `Load`, `Store`, `CompareAndSwap` makes `counter++` a single uninterruptible step. It protects exactly one value — no more.\n\n**`sync.Once`** — runs a piece of initialisation *exactly once*, no matter how many goroutines call it, and makes every caller wait until that first run finishes.",
+      body: "Reduce the sync tools to a small set of shapes and they stop surprising you.\n\n**`sync.Mutex`** — one key, one holder. Use it when you must protect an *invariant across one or more fields*: \"the map and its size counter must always agree,\" \"these two balances must sum to a constant.\" A mutex is the general answer.\n\n**`sync.RWMutex`** — a smarter lock with two modes: *many readers* (`RLock`) may hold it at once, XOR *one writer* (`Lock`) holds it alone. It only helps when reads vastly outnumber writes, because readers no longer block each other.\n\n**`sync/atomic`** — hardware-level indivisible operations on a *single word* (an `int64`, a pointer). `atomic.Int64` with `Add`, `Load`, `Store`, `CompareAndSwap` makes `counter++` a single uninterruptible step. It protects exactly one value — no more.\n\n**`sync.Once`** — runs a piece of initialization *exactly once*, no matter how many goroutines call it, and makes every caller wait until that first run finishes.",
       blocks: [
         {
           type: "note",
@@ -301,7 +301,7 @@ export const goSyncAtomic: Lesson = {
               {
                 id: "once",
                 label: "sync.Once",
-                detail: "Runs an initialiser exactly once across all goroutines; every caller waits for that first run to finish.",
+                detail: "Runs an initializer exactly once across all goroutines; every caller waits for that first run to finish.",
                 tone: "muted",
               },
             ],
@@ -311,7 +311,7 @@ export const goSyncAtomic: Lesson = {
       ],
     },
     mechanics: {
-      body: "Now the precise version. A `sync.Mutex` has two methods: `Lock()` blocks until the lock is free and then takes it, and `Unlock()` releases it. The idiomatic pattern is `mu.Lock()` followed immediately by `defer mu.Unlock()`, so the unlock fires on *every* exit path — normal return, early return, or panic — and you can never leak the lock. The zero value of a Mutex is a ready-to-use unlocked mutex, so you never initialise it.\n\nA `sync.RWMutex` adds `RLock()`/`RUnlock()` for readers alongside `Lock()`/`Unlock()` for writers. Any number of readers can hold the read lock simultaneously, but a writer's `Lock()` waits until all readers have released and then excludes everyone.\n\nAn `atomic.Int64` offers `Add(delta)`, `Load()`, `Store(v)`, and `CompareAndSwap(old, new)` — each a single indivisible operation. `atomic.Value` (or `atomic.Pointer[T]`) atomically stores and loads a whole value by swapping a pointer. `sync.Once` has one method, `Do(f)`, which runs `f` on the first call only.",
+      body: "Now the precise version. A `sync.Mutex` has two methods: `Lock()` blocks until the lock is free and then takes it, and `Unlock()` releases it. The idiomatic pattern is `mu.Lock()` followed immediately by `defer mu.Unlock()`, so the unlock fires on *every* exit path — normal return, early return, or panic — and you can never leak the lock. The zero value of a Mutex is a ready-to-use unlocked mutex, so you never initialize it.\n\nA `sync.RWMutex` adds `RLock()`/`RUnlock()` for readers alongside `Lock()`/`Unlock()` for writers. Any number of readers can hold the read lock simultaneously, but a writer's `Lock()` waits until all readers have released and then excludes everyone.\n\nAn `atomic.Int64` offers `Add(delta)`, `Load()`, `Store(v)`, and `CompareAndSwap(old, new)` — each a single indivisible operation. `atomic.Value` (or `atomic.Pointer[T]`) atomically stores and loads a whole value by swapping a pointer. `sync.Once` has one method, `Do(f)`, which runs `f` on the first call only.",
       blocks: [
         {
           type: "example",
@@ -319,9 +319,9 @@ export const goSyncAtomic: Lesson = {
             title: "The canonical mutex pattern: Lock then defer Unlock",
             language: "go",
             code:
-              'type SafeCounter struct {\n    mu sync.Mutex // zero value is ready to use — no initialisation\n    n  int\n}\n\n// Pointer receiver: all callers share ONE counter and ONE mutex.\nfunc (c *SafeCounter) Inc() {\n    c.mu.Lock()\n    defer c.mu.Unlock() // released as Inc returns, on every path\n    c.n++               // the critical section — only one goroutine here\n}\n\nfunc (c *SafeCounter) Value() int {\n    c.mu.Lock()\n    defer c.mu.Unlock()\n    return c.n // even a read needs the lock: it pairs with the write\n}',
+              'type SafeCounter struct {\n    mu sync.Mutex // zero value is ready to use — no initialization\n    n  int\n}\n\n// Pointer receiver: all callers share ONE counter and ONE mutex.\nfunc (c *SafeCounter) Inc() {\n    c.mu.Lock()\n    defer c.mu.Unlock() // released as Inc returns, on every path\n    c.n++               // the critical section — only one goroutine here\n}\n\nfunc (c *SafeCounter) Value() int {\n    c.mu.Lock()\n    defer c.mu.Unlock()\n    return c.n // even a read needs the lock: it pairs with the write\n}',
             takeaway:
-              "Lock, defer Unlock, touch the data, done. The pointer receiver is essential — a value receiver would copy the mutex and defeat it. Reads take the lock too, because an unsynchronised read still races with a write.",
+              "Lock, defer Unlock, touch the data, done. The pointer receiver is essential — a value receiver would copy the mutex and defeat it. Reads take the lock too, because an unsynchronized read still races with a write.",
           },
         },
         {
@@ -347,12 +347,12 @@ export const goSyncAtomic: Lesson = {
       ],
     },
     diagram: {
-      body: "The move worth watching is what a mutex actually does to overlapping goroutines: it *serialises* them through the critical section. Below, three goroutines all want to increment the same counter. Follow the steps — they don't run the increment at once; the lock forces them into single file, and the lost-update problem disappears because no two reads-and-writes ever overlap.",
+      body: "The move worth watching is what a mutex actually does to overlapping goroutines: it *serializes* them through the critical section. Below, three goroutines all want to increment the same counter. Follow the steps — they don't run the increment at once; the lock forces them into single file, and the lost-update problem disappears because no two reads-and-writes ever overlap.",
       blocks: [
         {
           type: "diagram",
           diagram: {
-            title: "A mutex serialises access to the critical section",
+            title: "A mutex serializes access to the critical section",
             kind: "sequence",
             nodes: [
               { id: "g1lock", label: "G1 Lock() — takes the key", detail: "G2 and G3 arrive and block at the door" },
@@ -382,7 +382,7 @@ export const goSyncAtomic: Lesson = {
       ],
     },
     implementation: {
-      body: "Here is the pattern you'll use most in a backend: a small type that owns some shared state and guards every access with a lock, exposing safe methods. Callers never touch the fields directly — they go through methods that Lock and Unlock, so the synchronisation lives in one place and can't be forgotten. For a read-heavy structure like a cache, an `RWMutex` lets concurrent readers proceed without blocking each other.",
+      body: "Here is the pattern you'll use most in a backend: a small type that owns some shared state and guards every access with a lock, exposing safe methods. Callers never touch the fields directly — they go through methods that Lock and Unlock, so the synchronization lives in one place and can't be forgotten. For a read-heavy structure like a cache, an `RWMutex` lets concurrent readers proceed without blocking each other.",
       blocks: [
         {
           type: "example",
@@ -403,15 +403,15 @@ export const goSyncAtomic: Lesson = {
             code:
               'var (\n    once  sync.Once\n    rates map[string]float64\n)\n\nfunc Rates() map[string]float64 {\n    once.Do(func() {\n        rates = loadRatesFromDB() // runs on the FIRST call only\n    })\n    // every caller — even the first — waits until loadRatesFromDB finishes\n    return rates\n}',
             takeaway:
-              "No matter how many goroutines call Rates() at once, loadRatesFromDB runs exactly once and everyone waits for it. sync.Once removes the race and the double-initialisation you'd get from a hand-rolled `if rates == nil` check.",
+              "No matter how many goroutines call Rates() at once, loadRatesFromDB runs exactly once and everyone waits for it. sync.Once removes the race and the double-initialization you'd get from a hand-rolled `if rates == nil` check.",
           },
         },
         {
           type: "points",
           items: [
-            "Keep the state's fields unexported and expose only locked methods — synchronisation in one place.",
+            "Keep the state's fields unexported and expose only locked methods — synchronization in one place.",
             "Read-heavy structure → RWMutex, with RLock in readers and Lock in writers.",
-            "One-time initialisation → sync.Once.Do, which is race-free and runs the body exactly once.",
+            "One-time initialization → sync.Once.Do, which is race-free and runs the body exactly once.",
           ],
         },
       ],
@@ -523,15 +523,15 @@ export const goSyncAtomic: Lesson = {
       body: "Practice is what turns \"I read about mutexes\" into \"I reach for the right guard without thinking.\" Work across predicting a lost-update race, reading defer-Unlock timing, implementing a concurrency-safe cache, debugging a copied-mutex value receiver, refactoring a lock into an atomic, choosing between channel/mutex/atomic, and reasoning about why two atomics aren't jointly consistent. Each produces a different kind of evidence — do them, don't just read them.",
     },
     mastery: {
-      body: "You've mastered this when you can explain why unsynchronised shared access is a data race and undefined behaviour, write a type whose methods guard shared state with correct defer-Unlock discipline and a pointer receiver, predict where an atomic is enough and where it isn't, and choose deliberately between a channel and a lock for a given workload. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
+      body: "You've mastered this when you can explain why unsynchronized shared access is a data race and undefined behavior, write a type whose methods guard shared state with correct defer-Unlock discipline and a pointer receiver, predict where an atomic is enough and where it isn't, and choose deliberately between a channel and a lock for a given workload. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Two ideas carry this lesson. **Shared state needs synchronisation** — two goroutines touching the same variable with at least one writing is a data race, which is undefined behaviour, not just a wrong number; a `sync.Mutex` (Lock/defer Unlock) serialises access, `sync.RWMutex` lets many readers or one writer, `sync/atomic` makes a single-word update indivisible, and `sync.Once` runs setup exactly once. **Match the tool to the shape** — a mutex guards an invariant across fields, an atomic guards one word, a channel transfers ownership; \"share memory by communicating\" is a strong default, but a plain lock over naturally-shared, read-often state is often simpler and better.",
+      body: "Two ideas carry this lesson. **Shared state needs synchronization** — two goroutines touching the same variable with at least one writing is a data race, which is undefined behavior, not just a wrong number; a `sync.Mutex` (Lock/defer Unlock) serializes access, `sync.RWMutex` lets many readers or one writer, `sync/atomic` makes a single-word update indivisible, and `sync.Once` runs setup exactly once. **Match the tool to the shape** — a mutex guards an invariant across fields, an atomic guards one word, a channel transfers ownership; \"share memory by communicating\" is a strong default, but a plain lock over naturally-shared, read-often state is often simpler and better.",
       blocks: [
         {
           type: "points",
           items: [
-            "A data race is undefined behaviour — use `go test -race`; `counter++` is three steps, not one.",
+            "A data race is undefined behavior — use `go test -race`; `counter++` is three steps, not one.",
             "sync.Mutex: Lock then `defer Unlock`; never copy a sync value (pointer receivers).",
             "RWMutex for read-heavy invariants; atomic.Int64 for a single-word counter/flag; sync.Once for one-time init.",
             "Atomics make one operation atomic, not a compound update across fields — that needs a mutex. Channel to transfer, lock to guard. This closes Module 6's concurrency arc.",

@@ -21,13 +21,13 @@ export const goUnitTableTests: Lesson = {
   learningObjectives: [
     "Write a `func TestXxx(t *testing.T)` in a `_test.go` file and run it with `go test`, choosing `t.Errorf` vs `t.Fatalf` deliberately",
     "Convert repetitive one-per-case tests into a single table-driven test that loops a slice of cases through `t.Run` subtests",
-    "Compare results correctly with `==` versus `reflect.DeepEqual` (and know when to reach for go-cmp), and test exported behaviour rather than internals",
+    "Compare results correctly with `==` versus `reflect.DeepEqual` (and know when to reach for go-cmp), and test exported behavior rather than internals",
   ],
   concepts: ["testing", "table-tests", "subtests", "t.Run"],
   ledgerFlowApplications: [
     "Cover a balance rule with a table of many input/expected rows in one test",
     "Give each posting-rule case a readable subtest name so a failure points straight at the offending row",
-    "Assert on exported behaviour (the computed balance) instead of private helper internals",
+    "Assert on exported behavior (the computed balance) instead of private helper internals",
   ],
   references: [
     {
@@ -56,7 +56,7 @@ export const goUnitTableTests: Lesson = {
       teaches:
         "Idiomatic Go conventions, including naming, package layout, and the spirit of clear, minimal tests.",
       relevance:
-        "Grounds the `got`/`want` naming and test-exported-behaviour advice in the official style.",
+        "Grounds the `got`/`want` naming and test-exported-behavior advice in the official style.",
       required: false,
       section: "Names",
     },
@@ -66,7 +66,7 @@ export const goUnitTableTests: Lesson = {
       teaches:
         "A popular assertion/mock library (`assert`, `require`) some teams layer on top of the standard `testing` package.",
       relevance:
-        "Shows the common third-party alternative so you can recognise it, while this lesson stays on the standard library.",
+        "Shows the common third-party alternative so you can recognize it, while this lesson stays on the standard library.",
       required: false,
       section: "assert",
     },
@@ -127,7 +127,7 @@ export const goUnitTableTests: Lesson = {
         "A table-driven test calls `t.Parallel()` inside each subtest and appends every case's result to a shared `results` slice declared in the outer test. It passes sometimes and fails or panics other times. Explain the bug and the fix.",
       hints: [
         "Parallel subtests run at the same time; what happens when several append to the same slice concurrently?",
-        "Either don't share mutable state across parallel subtests (assert inside each subtest), or synchronise access.",
+        "Either don't share mutable state across parallel subtests (assert inside each subtest), or synchronize access.",
       ],
     },
     {
@@ -177,7 +177,7 @@ export const goUnitTableTests: Lesson = {
       id: "design-cases",
       kind: "design",
       description:
-        "Design a table of cases for a nontrivial rule so the table documents the behaviour, covering happy path, boundaries, and failures.",
+        "Design a table of cases for a nontrivial rule so the table documents the behavior, covering happy path, boundaries, and failures.",
       required: false,
     },
   ],
@@ -345,7 +345,7 @@ export const goUnitTableTests: Lesson = {
       ],
     },
     implementation: {
-      body: "Beyond the shape, two decisions matter for correct tests: **how you compare** results, and **what** you test. For simple comparable values — numbers, strings, booleans — use `==` (and `!=` in the `if`). But `==` doesn't work on slices, maps, or structs containing them; comparing those with `==` either won't compile or won't do what you want. For those, use `reflect.DeepEqual(got, want)`, which walks the values and compares them element by element. For richer needs (ignoring fields, better diffs) many teams use Google's `go-cmp` (`cmp.Equal` / `cmp.Diff`), but the standard library alone covers most cases.\n\nAs for *what* to test: test **exported behaviour**, not private internals. Verify that `Balance()` returns the right number, not that some unexported helper was called in a particular order. Behaviour-focused tests survive refactors; internal-structure tests break every time you tidy the code, teaching you to distrust your own suite.",
+      body: "Beyond the shape, two decisions matter for correct tests: **how you compare** results, and **what** you test. For simple comparable values — numbers, strings, booleans — use `==` (and `!=` in the `if`). But `==` doesn't work on slices, maps, or structs containing them; comparing those with `==` either won't compile or won't do what you want. For those, use `reflect.DeepEqual(got, want)`, which walks the values and compares them element by element. For richer needs (ignoring fields, better diffs) many teams use Google's `go-cmp` (`cmp.Equal` / `cmp.Diff`), but the standard library alone covers most cases.\n\nAs for *what* to test: test **exported behavior**, not private internals. Verify that `Balance()` returns the right number, not that some unexported helper was called in a particular order. Behavior-focused tests survive refactors; internal-structure tests break every time you tidy the code, teaching you to distrust your own suite.",
       blocks: [
         {
           type: "example",
@@ -371,7 +371,7 @@ export const goUnitTableTests: Lesson = {
           items: [
             "`==`/`!=` for comparable scalars; `reflect.DeepEqual` for slices, maps, composite structs.",
             "Name results `got` and `want` and print both in the message — it's the convention and it reads well.",
-            "Test exported behaviour, not private internals, so tests survive refactors.",
+            "Test exported behavior, not private internals, so tests survive refactors.",
           ],
         },
       ],
@@ -380,7 +380,7 @@ export const goUnitTableTests: Lesson = {
       body: "Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. You have a table-driven `TestBalance` with cases named `deposit`, `overdraft`, and `zero`. You run:\n\n```\ngo test -run 'TestBalance/overdraft' -v\n```\n\nWhich subtests execute, and what does `-v` add? Commit to an answer.\n\nHere's what happens. The `-run` pattern matches test names as a regular expression, and subtest names are joined to their parent with a slash. `TestBalance/overdraft` matches the parent `TestBalance` and, within it, only the `overdraft` subtest — so the loop still runs but `deposit` and `zero` are skipped, and only `overdraft` actually executes its body. `-v` (verbose) prints a line for each test and subtest as it runs (`=== RUN   TestBalance/overdraft`, `--- PASS: ...`), which is how you confirm exactly which cases ran. The lesson: named subtests aren't just tidy output — they're addressable, so you can rerun a single failing row in isolation while you fix it.",
     },
     "failure-cases": {
-      body: "The failures here cluster around two things: reaching for the wrong stop-behaviour (`Fatal` vs `Error`), and sharing state between subtests that run in parallel. Here are the ones you'll actually meet.",
+      body: "The failures here cluster around two things: reaching for the wrong stop-behavior (`Fatal` vs `Error`), and sharing state between subtests that run in parallel. Here are the ones you'll actually meet.",
       blocks: [
         {
           type: "points",
@@ -389,7 +389,7 @@ export const goUnitTableTests: Lesson = {
             "**`Fatalf` inside a loop of checks** → the first failing case stops the whole test, hiding the others. Prefer `Errorf` for independent per-case assertions.",
             "**`t.Parallel()` + shared mutable state** → parallel subtests race on the same slice/map/variable, giving flaky failures or panics. Don't share mutable state; assert inside each subtest.",
             "**Comparing slices/maps with `==`** → won't compile, or compares the wrong thing. Use `reflect.DeepEqual` (or go-cmp).",
-            "**Testing internals** → tests break on every refactor even when behaviour is unchanged. Assert on exported behaviour instead.",
+            "**Testing internals** → tests break on every refactor even when behavior is unchanged. Assert on exported behavior instead.",
           ],
         },
         {
@@ -420,14 +420,14 @@ export const goUnitTableTests: Lesson = {
       ],
     },
     design: {
-      body: "A few durable rules. Let the **table document the behaviour**: choose rows for the happy path, every boundary, and each distinct way the code can fail, and give each a `name` that reads like a sentence about the rule (`\"rejects zero amount\"`). Pick `Fatal` vs `Error` by asking \"can the next line safely run if this failed?\" Compare with the operator that fits the type. And test what a caller depends on — the exported behaviour — so your suite is a spec, not a mirror of your current internals.",
+      body: "A few durable rules. Let the **table document the behavior**: choose rows for the happy path, every boundary, and each distinct way the code can fail, and give each a `name` that reads like a sentence about the rule (`\"rejects zero amount\"`). Pick `Fatal` vs `Error` by asking \"can the next line safely run if this failed?\" Compare with the operator that fits the type. And test what a caller depends on — the exported behavior — so your suite is a spec, not a mirror of your current internals.",
       blocks: [
         {
           type: "points",
           items: [
             "Choose table rows to cover happy path + boundaries + each failure mode; make names read like sentences.",
             "`Fatal` when the next line can't run without this; `Error` for independent checks.",
-            "Test exported behaviour, name results `got`/`want`, and pick the right comparison for the type.",
+            "Test exported behavior, name results `got`/`want`, and pick the right comparison for the type.",
           ],
         },
         {
@@ -437,7 +437,7 @@ export const goUnitTableTests: Lesson = {
             context:
               "A posting rule must accept a positive amount in a known currency, reject a zero or negative amount, and reject an unknown currency. Written as a table, the case names are: \"accepts positive amount\", \"rejects zero amount\", \"rejects negative amount\", \"rejects unknown currency\".",
             insight:
-              "Someone reading only the case names learns the rule without reading the implementation. The table isn't just tests — it's executable documentation of the behaviour, and any new rule becomes a new row.",
+              "Someone reading only the case names learns the rule without reading the implementation. The table isn't just tests — it's executable documentation of the behavior, and any new rule becomes a new row.",
           },
         },
       ],
@@ -463,13 +463,13 @@ export const goUnitTableTests: Lesson = {
       ],
     },
     exercises: {
-      body: "Practice is what turns \"I've read about table tests\" into \"I write one without thinking.\" Work across predicting `Fatal` behaviour, reading a `-run` subtest filter, implementing a table-driven test from scratch, refactoring copy-pasted tests into a table, debugging a shared-state-in-parallel bug and a Fatal-vs-Error mistake, and designing the rows for a real rule. Each produces a different kind of evidence — do them, don't just read them.",
+      body: "Practice is what turns \"I've read about table tests\" into \"I write one without thinking.\" Work across predicting `Fatal` behavior, reading a `-run` subtest filter, implementing a table-driven test from scratch, refactoring copy-pasted tests into a table, debugging a shared-state-in-parallel bug and a Fatal-vs-Error mistake, and designing the rows for a real rule. Each produces a different kind of evidence — do them, don't just read them.",
     },
     mastery: {
       body: "You've mastered this when you can explain when to use `t.Fatalf` versus `t.Errorf`, predict which subtests a `go test -run` pattern selects, write a clean table-driven test with named subtests and correct comparisons, and design a table whose rows document a nontrivial rule. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Two ideas carry this lesson. **Tests are ordinary Go** — a `func TestXxx(t *testing.T)` in a `_test.go` file, found by convention and run with `go test`, that reports failures through `t` (with `t.Fatalf` to stop and `t.Errorf` to continue). **Table-driven tests scale that cleanly** — model a test as one question asked of many rows, put the cases in a slice of structs, and loop them through `t.Run(name, ...)` so each becomes a named, filterable subtest with the assertion written exactly once. Compare with the operator the type needs, test exported behaviour, and let the table document the rule.",
+      body: "Two ideas carry this lesson. **Tests are ordinary Go** — a `func TestXxx(t *testing.T)` in a `_test.go` file, found by convention and run with `go test`, that reports failures through `t` (with `t.Fatalf` to stop and `t.Errorf` to continue). **Table-driven tests scale that cleanly** — model a test as one question asked of many rows, put the cases in a slice of structs, and loop them through `t.Run(name, ...)` so each becomes a named, filterable subtest with the assertion written exactly once. Compare with the operator the type needs, test exported behavior, and let the table document the rule.",
       blocks: [
         {
           type: "points",
@@ -477,7 +477,7 @@ export const goUnitTableTests: Lesson = {
             "A test is `func TestXxx(t *testing.T)` in `_test.go`; `t.Fatalf` stops it, `t.Errorf` continues.",
             "Table-driven: a slice of case structs (name + inputs + want) looped through `t.Run` subtests.",
             "`==` for comparable scalars, `reflect.DeepEqual` (or go-cmp) for slices/maps/structs; name results `got`/`want`.",
-            "Test exported behaviour, not internals; each subtest name is filterable via `go test -run Test/case`.",
+            "Test exported behavior, not internals; each subtest name is filterable via `go test -run Test/case`.",
           ],
         },
       ],

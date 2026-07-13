@@ -124,7 +124,7 @@ export const goGenerics: Lesson = {
         "A teammate proposes making your Logger generic: `type Logger[T any] struct{...}`, even though it only ever logs strings. Argue for or against, citing the go.dev guidance on when generics help.",
       hints: [
         "Generics pay off when the *same logic* runs over many types; one concrete type is not that case.",
-        "If behaviour differs per type, an interface (method set) is usually clearer than a type parameter.",
+        "If behavior differs per type, an interface (method set) is usually clearer than a type parameter.",
       ],
     },
     {
@@ -383,7 +383,7 @@ export const goGenerics: Lesson = {
             "**Forgetting `~` in a constraint** → a named type like `type Cents int64` won't match `int64`. Write `~int64` to include underlying types.",
             "**Reaching for generics with one concrete type** → needless abstraction. If only strings ever pass through, don't parameterise.",
             "**Type parameter that appears only in the return** → the compiler can't infer it, so callers must write it explicitly, e.g. `New[int]()`. Often a sign the design should change.",
-            "**Choosing generics where an interface fits better** → if behaviour differs per type (different method bodies), a method set (interface) is clearer than a type set.",
+            "**Choosing generics where an interface fits better** → if behavior differs per type (different method bodies), a method set (interface) is clearer than a type set.",
           ],
         },
         {
@@ -405,7 +405,7 @@ export const goGenerics: Lesson = {
           type: "points",
           items: [
             "**Generic vs duplicated**: generics give one source of truth; the cost is a signature that's slightly more abstract to read.",
-            "**Generic vs interface**: use a type parameter when the *logic* is identical across types (Map, Filter). Use an interface when the *behaviour* differs per type (each implements the method its own way).",
+            "**Generic vs interface**: use a type parameter when the *logic* is identical across types (Map, Filter). Use an interface when the *behavior* differs per type (each implements the method its own way).",
             "**Generic vs one concrete type**: if only one type ever flows through, a plain function is simpler and clearer — don't parameterise on principle.",
             "**Readability cost**: `[T Number]` and `~int64` are extra vocabulary a reader must know; spend it only where the reuse pays for it.",
           ],
@@ -417,7 +417,7 @@ export const goGenerics: Lesson = {
             context:
               "You have shapes — Circle, Rectangle — that each compute Area differently. Someone suggests `Area[T Shape](s T)`.",
             insight:
-              "The behaviour differs per type, so a plain `interface { Area() float64 }` is clearer: each shape supplies its own method. Generics fit when the logic is the same, not when it varies.",
+              "The behavior differs per type, so a plain `interface { Area() float64 }` is clearer: each shape supplies its own method. Generics fit when the logic is the same, not when it varies.",
           },
         },
       ],
@@ -430,7 +430,7 @@ export const goGenerics: Lesson = {
           items: [
             "Add generics to remove real duplication, not speculatively.",
             "Constrain as tightly as the operations require — the constraint documents what the code does.",
-            "If behaviour varies per type, choose an interface; if logic is identical, choose a type parameter.",
+            "If behavior varies per type, choose an interface; if logic is identical, choose a type parameter.",
             "Check `slices`/`maps` in the standard library before writing your own Map/Filter/Contains.",
           ],
         },
@@ -475,7 +475,7 @@ export const goGenerics: Lesson = {
             "Constraints are type sets: `any` (all types, no ops), `comparable` (==), custom like `~int | ~float64` (arithmetic).",
             "`~T` means 'underlying type is T', so named types qualify.",
             "The compiler usually *infers* type arguments from the values you pass — you rarely write them.",
-            "Use generics for identical logic across types; prefer an interface for differing behaviour and a concrete type for a single case.",
+            "Use generics for identical logic across types; prefer an interface for differing behavior and a concrete type for a single case.",
           ],
         },
       ],

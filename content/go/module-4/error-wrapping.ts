@@ -45,7 +45,7 @@ export const goErrorWrapping: Lesson = {
       teaches:
         "The exact contracts of errors.Is, errors.As, errors.Unwrap, and errors.Join, including the Unwrap interfaces.",
       relevance:
-        "The reference to keep open while writing the code — the precise signatures and behaviour behind the prose.",
+        "The reference to keep open while writing the code — the precise signatures and behavior behind the prose.",
       required: true,
       section: "Is; As; Unwrap; Join",
     },

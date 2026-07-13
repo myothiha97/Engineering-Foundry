@@ -44,7 +44,7 @@ export const goTimeContext: Lesson = {
       url: "https://pkg.go.dev/context",
       teaches:
         "The exact signatures of Background, WithTimeout, WithCancel, Done, Err, and the documented rules for using them.",
-      relevance: "Settles the precise API behaviour — that cancel must be called and that ctx is the first parameter.",
+      relevance: "Settles the precise API behavior — that cancel must be called and that ctx is the first parameter.",
       required: true,
       section: "Overview",
     },

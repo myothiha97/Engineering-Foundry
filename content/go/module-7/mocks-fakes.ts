@@ -23,7 +23,7 @@ export const goMocksFakes: Lesson = {
     "Name the common test doubles — stub, fake, mock, and spy — and pick the right one for a given test",
     "Inject a dependency as a small, consumer-defined interface so tests can pass a stand-in instead of the real thing",
     "Write a hand-written in-memory fake that satisfies a Store interface and use it to test a service's business rules",
-    "Recognise over-mocked, brittle tests and refactor them toward testing behaviour instead of interactions",
+    "Recognize over-mocked, brittle tests and refactor them toward testing behavior instead of interactions",
   ],
   concepts: ["mocks", "fakes", "interfaces", "dependency-injection"],
   ledgerFlowApplications: [
@@ -56,7 +56,7 @@ export const goMocksFakes: Lesson = {
       title: "The Go Blog — Errors are values / interface design (Go blog on interfaces)",
       url: "https://go.dev/blog/errors-are-values",
       teaches:
-        "How designing to small behavioural interfaces keeps code composable and testable rather than tied to a concrete type.",
+        "How designing to small behavioral interfaces keeps code composable and testable rather than tied to a concrete type.",
       relevance:
         "Reinforces why narrow interfaces (often one method) are what you inject and fake, not sprawling ones.",
       required: false,
@@ -94,7 +94,7 @@ export const goMocksFakes: Lesson = {
       starterCode:
         "// (a)\nfunc (s stubStore) Get(id string) (Account, error) { return Account{Balance: 100}, nil }\n\n// (b)\nfunc (f *fakeStore) Save(a Account) error { f.m[a.ID] = a; return nil }\nfunc (f *fakeStore) Get(id string) (Account, error) { return f.m[id], nil }\n\n// (c)\nfunc (m *mockStore) Save(a Account) error { m.saveCalls++; return nil }\n// test: if m.saveCalls != 1 { t.Fatalf(\"want 1 Save, got %d\", m.saveCalls) }",
       expectedAnswer:
-        "(a) is a stub: it returns a fixed canned answer and has no real behaviour. (b) is a fake: a working lightweight implementation you can Save into and Get back out of. (c) is a mock: it records calls and the test verifies an expectation (Save happened exactly once).",
+        "(a) is a stub: it returns a fixed canned answer and has no real behavior. (b) is a fake: a working lightweight implementation you can Save into and Get back out of. (c) is a mock: it records calls and the test verifies an expectation (Save happened exactly once).",
       hints: [
         "Stub = canned answer; fake = working simplified implementation; mock = records/verifies calls.",
         "Ask: does it store real state? does the test assert on how it was called?",
@@ -134,7 +134,7 @@ export const goMocksFakes: Lesson = {
       prompt:
         "You are testing `Transfer(from, to, amount)`, which debits one account, credits another, and writes one audit-log entry. For (1) verifying the balances end up correct and (2) proving an audit entry was written, decide whether a fake or a mock fits each, and justify.",
       expectedAnswer:
-        "(1) Balances: use a fake store. You care about the resulting state, so let the fake round-trip Save/Get and assert the final balances — behaviour, not calls. (2) Audit entry: a mock (or spy) fits, because the observable outcome you care about IS that a specific call happened. Verify the audit writer was called once with the expected entry. Rule of thumb: fake when you can assert on state, mock when the interaction itself is the contract.",
+        "(1) Balances: use a fake store. You care about the resulting state, so let the fake round-trip Save/Get and assert the final balances — behavior, not calls. (2) Audit entry: a mock (or spy) fits, because the observable outcome you care about IS that a specific call happened. Verify the audit writer was called once with the expected entry. Rule of thumb: fake when you can assert on state, mock when the interaction itself is the contract.",
       hints: [
         "Prefer asserting on state (balances) over asserting on calls.",
         "When the only thing you can observe is 'the call happened', that is where a mock/spy earns its place.",
@@ -148,9 +148,9 @@ export const goMocksFakes: Lesson = {
       starterCode:
         "m := &mockStore{}\nm.On(\"Get\", \"a\").Return(Account{Balance: 100}, nil).Once()\nm.On(\"Get\", \"b\").Return(Account{Balance: 0}, nil).Once()\nm.On(\"Save\", mock.Anything).Return(nil).Times(2)\nsvc := NewTransferService(m)\nsvc.Transfer(\"a\", \"b\", 30)\nm.AssertExpectations(t) // fails if call count/order/args differ at all",
       expectedAnswer:
-        "It is over-specified: it pins down exact call counts and arguments for every interaction, so any internal refactor that still yields correct balances (an extra Get, a reordered Save, a cached read) fails the test. The test asserts on interactions, not behaviour. Fix: use an in-memory fake and assert on the resulting balances (a ends at 70, b at 30). Reserve mocks for the one interaction that truly is the contract, and match arguments loosely there.",
+        "It is over-specified: it pins down exact call counts and arguments for every interaction, so any internal refactor that still yields correct balances (an extra Get, a reordered Save, a cached read) fails the test. The test asserts on interactions, not behavior. Fix: use an in-memory fake and assert on the resulting balances (a ends at 70, b at 30). Reserve mocks for the one interaction that truly is the contract, and match arguments loosely there.",
       hints: [
-        "Over-mocking couples the test to the implementation, not the behaviour.",
+        "Over-mocking couples the test to the implementation, not the behavior.",
         "Swap to a fake and check final state; only verify calls when the call itself is what you're testing.",
       ],
     },
@@ -160,7 +160,7 @@ export const goMocksFakes: Lesson = {
       prompt:
         "A teammate wants to mock `*sql.DB` (a type from the standard library your code doesn't own) directly in tests. Explain why 'don't mock types you don't own' applies, and describe the idiomatic alternative.",
       expectedAnswer:
-        "Mocking a type you don't own means guessing and freezing its behaviour — a huge, evolving surface whose real semantics your mock will drift from, giving green tests against wrong assumptions. Instead, wrap the dependency behind your own small interface (e.g. a Store with just the methods your service uses). Your production Store adapts *sql.DB; your test supplies a fake of your interface. You only ever double an interface you defined, keeping it narrow and truthful.",
+        "Mocking a type you don't own means guessing and freezing its behavior — a huge, evolving surface whose real semantics your mock will drift from, giving green tests against wrong assumptions. Instead, wrap the dependency behind your own small interface (e.g. a Store with just the methods your service uses). Your production Store adapts *sql.DB; your test supplies a fake of your interface. You only ever double an interface you defined, keeping it narrow and truthful.",
       hints: [
         "A mock of a foreign type encodes your assumptions about code you can't control.",
         "Define a small interface you own and fake that; the real implementation adapts the third-party type.",
@@ -230,7 +230,7 @@ export const goMocksFakes: Lesson = {
             code:
               "// Scripts every interaction and asserts on all of them.\nm := &mockStore{}\nm.On(\"Get\", \"a\").Return(Account{Balance: 100}, nil).Once()\nm.On(\"Save\", mock.Anything).Return(nil).Once()\nsvc := NewAccountService(m)\nsvc.Withdraw(\"a\", 40)\nm.AssertExpectations(t) // passes only if the calls happened EXACTLY as scripted",
             takeaway:
-              "This test asserts *how* Withdraw talks to the store, not *what* it achieves. Change the implementation without changing behaviour and it breaks anyway.",
+              "This test asserts *how* Withdraw talks to the store, not *what* it achieves. Change the implementation without changing behavior and it breaks anyway.",
           },
         },
         {
@@ -244,16 +244,16 @@ export const goMocksFakes: Lesson = {
       ],
     },
     failure: {
-      body: "The heavy-mocking failure is insidious because the tests are green today. You refactor `Withdraw` — maybe it now reads the account once and reuses it instead of calling `Get` twice, with identical behaviour — and a dozen tests go red. Not because anything broke, but because they asserted on the *exact* calls. You've built tests that punish improvement.\n\nThe real cause is a category error: the test verified **interactions** (which methods were called, in what order, with what args) when it should have verified **behaviour** (the balance ended up correct). Interaction tests are only right when the interaction itself is the observable outcome. Everywhere else, they turn your test suite into cement around the current implementation.",
+      body: "The heavy-mocking failure is insidious because the tests are green today. You refactor `Withdraw` — maybe it now reads the account once and reuses it instead of calling `Get` twice, with identical behavior — and a dozen tests go red. Not because anything broke, but because they asserted on the *exact* calls. You've built tests that punish improvement.\n\nThe real cause is a category error: the test verified **interactions** (which methods were called, in what order, with what args) when it should have verified **behavior** (the balance ended up correct). Interaction tests are only right when the interaction itself is the observable outcome. Everywhere else, they turn your test suite into cement around the current implementation.",
       blocks: [
         {
           type: "scenario",
           scenario: {
             title: "The refactor that broke 30 green tests",
             context:
-              "A team mocked the store in every service test and asserted exact call counts. A cleanup changed how many times the service read the store internally — same inputs, same outputs, same balances. Thirty tests failed. Nobody's behaviour changed; only the call pattern did.",
+              "A team mocked the store in every service test and asserted exact call counts. A cleanup changed how many times the service read the store internally — same inputs, same outputs, same balances. Thirty tests failed. Nobody's behavior changed; only the call pattern did.",
             insight:
-              "The tests were coupled to the implementation, not the contract. Had they used a fake and asserted on final balances, the refactor would have sailed through — as it should, because behaviour was unchanged.",
+              "The tests were coupled to the implementation, not the contract. Had they used a fake and asserted on final balances, the refactor would have sailed through — as it should, because behavior was unchanged.",
           },
         },
       ],
@@ -327,7 +327,7 @@ export const goMocksFakes: Lesson = {
       ],
     },
     mechanics: {
-      body: "The mechanism is three moves. First, **define the interface in the package that consumes it** — next to the service, not next to the database code. This is the Go proverb 'accept interfaces, return structs': the consumer states the narrow behaviour it needs, and the concrete store *returns* itself to fit. Keep the interface small — often one or two methods — because a fake has to reimplement every method, and narrow interfaces are cheap to fake.\n\nSecond, **inject** the dependency: the service holds it as a struct field, set by a constructor (`NewAccountService(s Store)`), rather than calling `sql.Open` inside its methods. Third, in tests, **pass a double** that satisfies the interface. Because satisfaction is implicit, your `fakeStore` just needs the right methods and it fits — no declaration linking it to `Store`.",
+      body: "The mechanism is three moves. First, **define the interface in the package that consumes it** — next to the service, not next to the database code. This is the Go proverb 'accept interfaces, return structs': the consumer states the narrow behavior it needs, and the concrete store *returns* itself to fit. Keep the interface small — often one or two methods — because a fake has to reimplement every method, and narrow interfaces are cheap to fake.\n\nSecond, **inject** the dependency: the service holds it as a struct field, set by a constructor (`NewAccountService(s Store)`), rather than calling `sql.Open` inside its methods. Third, in tests, **pass a double** that satisfies the interface. Because satisfaction is implicit, your `fakeStore` just needs the right methods and it fits — no declaration linking it to `Store`.",
       blocks: [
         {
           type: "example",
@@ -335,7 +335,7 @@ export const goMocksFakes: Lesson = {
             title: "Interface defined by the consumer, dependency injected",
             language: "go",
             code:
-              "package bank\n\n// The service declares the NARROW behaviour it needs — here, in its own package.\ntype Store interface {\n    Get(id string) (Account, error)\n    Save(a Account) error\n}\n\ntype AccountService struct {\n    store Store // injected, not constructed inside\n}\n\nfunc NewAccountService(s Store) *AccountService {\n    return &AccountService{store: s}\n}\n\nfunc (s *AccountService) Withdraw(id string, amount int) error {\n    acc, err := s.store.Get(id)\n    if err != nil {\n        return err\n    }\n    if acc.Balance < amount {\n        return ErrInsufficientFunds\n    }\n    acc.Balance -= amount\n    return s.store.Save(acc)\n}",
+              "package bank\n\n// The service declares the NARROW behavior it needs — here, in its own package.\ntype Store interface {\n    Get(id string) (Account, error)\n    Save(a Account) error\n}\n\ntype AccountService struct {\n    store Store // injected, not constructed inside\n}\n\nfunc NewAccountService(s Store) *AccountService {\n    return &AccountService{store: s}\n}\n\nfunc (s *AccountService) Withdraw(id string, amount int) error {\n    acc, err := s.store.Get(id)\n    if err != nil {\n        return err\n    }\n    if acc.Balance < amount {\n        return ErrInsufficientFunds\n    }\n    acc.Balance -= amount\n    return s.store.Save(acc)\n}",
             takeaway:
               "The service depends only on `Store`. Production wires in a Postgres-backed store; tests wire in a fake. Neither the service nor `Withdraw` changes.",
           },
@@ -394,7 +394,7 @@ export const goMocksFakes: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before reading on — a corrected wrong guess sticks better than a skimmed right answer. Suppose the fake's `Save` has a bug: it forgets to actually store, so it's `func (f *fakeStore) Save(a Account) error { return nil }` (a no-op). You run the `TestWithdraw` above.\n\nWhat happens? Commit to an answer.\n\nHere's the trace: `Withdraw` reads `a` (balance 100), passes the check, computes 60, and calls `Save` — which silently discards it. The map still holds 100. The assertion `got != 60` fires, and the test fails with `balance = 100, want 60`. The lesson is sharp: **a fake is only useful if it's correct.** A fake that lies (Save that doesn't save) gives you false confidence or false failures. Fakes must be simple enough to trust *and* actually implement the behaviour they stand for — that's the discipline that separates a fake from a broken stub.",
+      body: "Predict before reading on — a corrected wrong guess sticks better than a skimmed right answer. Suppose the fake's `Save` has a bug: it forgets to actually store, so it's `func (f *fakeStore) Save(a Account) error { return nil }` (a no-op). You run the `TestWithdraw` above.\n\nWhat happens? Commit to an answer.\n\nHere's the trace: `Withdraw` reads `a` (balance 100), passes the check, computes 60, and calls `Save` — which silently discards it. The map still holds 100. The assertion `got != 60` fires, and the test fails with `balance = 100, want 60`. The lesson is sharp: **a fake is only useful if it's correct.** A fake that lies (Save that doesn't save) gives you false confidence or false failures. Fakes must be simple enough to trust *and* actually implement the behavior they stand for — that's the discipline that separates a fake from a broken stub.",
     },
     "failure-cases": {
       body: "The failures here cluster around two mistakes: over-specifying mocks, and building doubles you can't trust. Here are the ones you'll actually hit.",
@@ -402,7 +402,7 @@ export const goMocksFakes: Lesson = {
         {
           type: "points",
           items: [
-            "**Over-specified mock** → asserting exact call count, order, and args when behaviour is what matters; every refactor breaks it. Assert on state with a fake instead.",
+            "**Over-specified mock** → asserting exact call count, order, and args when behavior is what matters; every refactor breaks it. Assert on state with a fake instead.",
             "**A fake that's subtly wrong** → a `Save` that doesn't persist, or a `Get` that ignores IDs, gives false results. Keep fakes simple and correct enough to trust.",
             "**Mocking a type you don't own** → doubling `*sql.DB` or an HTTP client freezes your guesses about foreign code. Wrap it behind your own small interface and fake that.",
             "**A fat interface** → a 12-method interface forces a 12-method fake for a test that uses two. Split it; depend on the narrow slice you actually call.",
@@ -431,7 +431,7 @@ export const goMocksFakes: Lesson = {
             "**Fake vs mock**: a fake tests state and survives refactors, but you must write and maintain a small correct implementation. A mock is quick to script but couples the test to the call pattern.",
             "**Hand-written vs framework (testify/mock)**: hand-written fakes are explicit and dependency-free; a framework saves boilerplate for many similar mocks but adds a DSL and a tendency toward over-specification.",
             "**Narrow interface**: easy to fake and clear about needs, but you may end up with several small interfaces instead of one big one — usually a feature, occasionally noise.",
-            "**Faking away the real thing**: fast tests, but a fake can drift from real behaviour (real SQL constraints, ordering, errors). Keep a few integration tests against the real dependency too.",
+            "**Faking away the real thing**: fast tests, but a fake can drift from real behavior (real SQL constraints, ordering, errors). Keep a few integration tests against the real dependency too.",
           ],
         },
       ],
@@ -487,7 +487,7 @@ export const goMocksFakes: Lesson = {
       body: "You've mastered this when you can explain the difference between a stub, fake, mock, and spy and pick the right one, predict the state a fake ends in after a service operation, write an in-memory fake behind a consumer-defined interface plus a test that uses it, and decide between a fake and a mock by whether there's state to assert on. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Two ideas carry this lesson. **Doubles let you test rules without infrastructure** — a stub returns canned answers, a fake is a working lightweight implementation (your default), a mock records and verifies calls, a spy just records. You plug them in by depending on a small, consumer-defined **interface** and **injecting** the dependency, which Go's implicit satisfaction makes free. **Prefer behaviour over interactions** — assert on the state a fake ends in, not on which methods were called; reach for a mock only when the call itself is the outcome, and never mock a type you don't own.",
+      body: "Two ideas carry this lesson. **Doubles let you test rules without infrastructure** — a stub returns canned answers, a fake is a working lightweight implementation (your default), a mock records and verifies calls, a spy just records. You plug them in by depending on a small, consumer-defined **interface** and **injecting** the dependency, which Go's implicit satisfaction makes free. **Prefer behavior over interactions** — assert on the state a fake ends in, not on which methods were called; reach for a mock only when the call itself is the outcome, and never mock a type you don't own.",
       blocks: [
         {
           type: "points",

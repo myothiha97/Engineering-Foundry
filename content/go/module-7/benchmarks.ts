@@ -13,7 +13,7 @@ export const goBenchmarks: Lesson = {
   slug: "benchmarks",
   title: "Benchmarks",
   description:
-    "Write `BenchmarkXxx(b *testing.B)` functions, run them with `go test -bench=. -benchmem`, and read `ns/op`, `B/op`, and `allocs/op` — so you optimise from measurements, not guesses.",
+    "Write `BenchmarkXxx(b *testing.B)` functions, run them with `go test -bench=. -benchmem`, and read `ns/op`, `B/op`, and `allocs/op` — so you optimize from measurements, not guesses.",
   moduleId: "go-7",
   estimatedMinutes: 45,
   difficulty: "advanced",
@@ -21,7 +21,7 @@ export const goBenchmarks: Lesson = {
   learningObjectives: [
     "Write a `func BenchmarkXxx(b *testing.B)` that loops `b.N` times and run it with `go test -bench=. -benchmem`",
     "Read a benchmark result line and explain what `ns/op`, `B/op`, and `allocs/op` each mean",
-    "Prevent the compiler from optimising away benchmarked work by assigning the result to a package-level sink variable, and use `b.ResetTimer` to exclude setup",
+    "Prevent the compiler from optimizing away benchmarked work by assigning the result to a package-level sink variable, and use `b.ResetTimer` to exclude setup",
   ],
   concepts: ["benchmarks", "b.N", "allocs"],
   ledgerFlowApplications: [
@@ -92,7 +92,7 @@ export const goBenchmarks: Lesson = {
       id: "go7bm-implement-sink",
       type: "implementation",
       prompt:
-        "Write a benchmark for `formatAmount(cents int64) string`. Build the input once outside the timed loop, reset the timer so setup is excluded, and store each result in a package-level sink so the compiler cannot optimise the call away.",
+        "Write a benchmark for `formatAmount(cents int64) string`. Build the input once outside the timed loop, reset the timer so setup is excluded, and store each result in a package-level sink so the compiler cannot optimize the call away.",
       starterCode:
         'package ledger\n\nimport "testing"\n\n// TODO: package-level sink here\n\nfunc BenchmarkFormatAmount(b *testing.B) {\n  // TODO: build input, reset timer, loop b.N times, defeat dead-code elimination\n}',
       expectedAnswer:
@@ -185,14 +185,14 @@ export const goBenchmarks: Lesson = {
   ],
   sections: {
     problem: {
-      body: "You've made a function faster — or you think you have. You rewrote the transaction-posting path to avoid a slice copy, and it *feels* quicker. But feelings are terrible at measuring nanoseconds. Maybe your change helped; maybe it helped in one spot and hurt in another; maybe the slow part was somewhere you never looked.\n\nThe discipline that separates real optimisation from superstition is simple: **measure before you optimise**. Go builds the measuring tool right into the test framework. A **benchmark** is a special test function that runs your code many times and reports how long each run took and how much memory it allocated — turning \"I think it's faster\" into \"it's 4820 ns/op, down from 6100.\"",
+      body: "You've made a function faster — or you think you have. You rewrote the transaction-posting path to avoid a slice copy, and it *feels* quicker. But feelings are terrible at measuring nanoseconds. Maybe your change helped; maybe it helped in one spot and hurt in another; maybe the slow part was somewhere you never looked.\n\nThe discipline that separates real optimization from superstition is simple: **measure before you optimize**. Go builds the measuring tool right into the test framework. A **benchmark** is a special test function that runs your code many times and reports how long each run took and how much memory it allocated — turning \"I think it's faster\" into \"it's 4820 ns/op, down from 6100.\"",
       blocks: [
         {
           type: "note",
           note: {
             tone: "analogy",
             title: "Analogy",
-            text: "Optimising without benchmarking is like dieting without a scale. You might be doing the right thing, but you have no way to know — and you'll happily 'improve' something that was never the problem. A benchmark is the scale: it tells you the number so you stop guessing.",
+            text: "Optimizing without benchmarking is like dieting without a scale. You might be doing the right thing, but you have no way to know — and you'll happily 'improve' something that was never the problem. A benchmark is the scale: it tells you the number so you stop guessing.",
           },
         },
         {
@@ -200,7 +200,7 @@ export const goBenchmarks: Lesson = {
           items: [
             "A **benchmark** measures how fast (and how allocation-heavy) a piece of code is.",
             "It lives in a `_test.go` file, like a test, but reports numbers instead of pass/fail.",
-            "The rule it enforces: **measure before you optimise** — never trust a hunch about speed.",
+            "The rule it enforces: **measure before you optimize** — never trust a hunch about speed.",
           ],
         },
       ],
@@ -229,7 +229,7 @@ export const goBenchmarks: Lesson = {
       ],
     },
     failure: {
-      body: "Even once you switch to a proper `Benchmark` function, there's a trap that fools almost everyone the first time: your benchmark reports a number that is *too good to be true* — like `0.3 ns/op`, which is faster than a single CPU instruction can run a real function. You celebrate. You should be suspicious.\n\nWhat happened is **dead-code elimination**. The Go compiler is allowed to delete work whose result nobody uses, because deleting it can't change the program's observable behaviour. If your benchmark loop calls `hash(data)` and throws the result away, the compiler quietly removes the call — so your loop measures *nothing*, and you get a nonsense sub-nanosecond result. The benchmark ran; it just didn't benchmark anything.",
+      body: "Even once you switch to a proper `Benchmark` function, there's a trap that fools almost everyone the first time: your benchmark reports a number that is *too good to be true* — like `0.3 ns/op`, which is faster than a single CPU instruction can run a real function. You celebrate. You should be suspicious.\n\nWhat happened is **dead-code elimination**. The Go compiler is allowed to delete work whose result nobody uses, because deleting it can't change the program's observable behavior. If your benchmark loop calls `hash(data)` and throws the result away, the compiler quietly removes the call — so your loop measures *nothing*, and you get a nonsense sub-nanosecond result. The benchmark ran; it just didn't benchmark anything.",
       blocks: [
         {
           type: "scenario",
@@ -293,7 +293,7 @@ export const goBenchmarks: Lesson = {
       ],
     },
     mechanics: {
-      body: "Now the precise version. You run benchmarks with `go test -bench=<pattern> -benchmem`. The `-bench` flag takes a regular expression matching benchmark names — `-bench=.` runs them all, `-bench=Post` runs those with \"Post\" in the name. Without `-bench`, `go test` skips benchmarks entirely and only runs tests. The `-benchmem` flag adds the memory columns (`B/op` and `allocs/op`) to the output.\n\nInside the function you have a few controls on `b`. `b.ResetTimer()` zeroes the clock so expensive setup before it doesn't count. `b.StopTimer()` / `b.StartTimer()` pause and resume timing around per-iteration setup you can't hoist out of the loop. `b.ReportAllocs()` opts a single benchmark into allocation reporting even without the `-benchmem` flag. And `b.RunParallel(...)` runs the body on multiple goroutines to measure behaviour under contention. The one non-negotiable is the loop shape: `for i := 0; i < b.N; i++`.",
+      body: "Now the precise version. You run benchmarks with `go test -bench=<pattern> -benchmem`. The `-bench` flag takes a regular expression matching benchmark names — `-bench=.` runs them all, `-bench=Post` runs those with \"Post\" in the name. Without `-bench`, `go test` skips benchmarks entirely and only runs tests. The `-benchmem` flag adds the memory columns (`B/op` and `allocs/op`) to the output.\n\nInside the function you have a few controls on `b`. `b.ResetTimer()` zeroes the clock so expensive setup before it doesn't count. `b.StopTimer()` / `b.StartTimer()` pause and resume timing around per-iteration setup you can't hoist out of the loop. `b.ReportAllocs()` opts a single benchmark into allocation reporting even without the `-benchmem` flag. And `b.RunParallel(...)` runs the body on multiple goroutines to measure behavior under contention. The one non-negotiable is the loop shape: `for i := 0; i < b.N; i++`.",
       blocks: [
         {
           type: "example",
@@ -351,7 +351,7 @@ export const goBenchmarks: Lesson = {
           note: {
             tone: "tip",
             title: "Why allocs/op matters as much as ns/op",
-            text: "Allocations aren't just memory — each one is work for the garbage collector later. A function that drops from 14 allocs/op to 2 often gets faster *and* eases GC pressure across the whole program. When you optimise, watch allocs/op, not only the clock.",
+            text: "Allocations aren't just memory — each one is work for the garbage collector later. A function that drops from 14 allocs/op to 2 often gets faster *and* eases GC pressure across the whole program. When you optimize, watch allocs/op, not only the clock.",
           },
         },
       ],
@@ -374,7 +374,7 @@ export const goBenchmarks: Lesson = {
           type: "points",
           items: [
             "Declare a **package-level sink** variable and assign the operation's result to it.",
-            "A local variable can be optimised away with the work; a package-level one cannot.",
+            "A local variable can be optimized away with the work; a package-level one cannot.",
             "One sink per result type (`sinkString`, `sinkErr`, ...); assign in or right after the loop.",
           ],
         },
@@ -393,7 +393,7 @@ export const goBenchmarks: Lesson = {
             "**Setup inside the timed loop** → you measure setup + operation, not the operation. Hoist setup out and call `b.ResetTimer()`, or wrap per-iteration setup in `StopTimer`/`StartTimer`.",
             "**Benchmarking with `-race`** → the race detector instruments every memory access, so timings balloon and distort. Run correctness tests with `-race`; run benchmarks without it.",
             "**One run only** → CPU scaling, background load, and GC make a single number noisy. Use `-count=N` and compare with benchstat.",
-            "**Unrealistic input size** → a 3-element slice hides the allocation behaviour of a 100,000-element one. Measure the size you actually run in production.",
+            "**Unrealistic input size** → a 3-element slice hides the allocation behavior of a 100,000-element one. Measure the size you actually run in production.",
           ],
         },
         {
@@ -418,7 +418,7 @@ export const goBenchmarks: Lesson = {
             "**Micro-benchmark vs real workload**: measuring one function precisely can mislead — the function might not be your program's bottleneck at all. Confirm with a profiler on the real workload (that's the pprof lesson).",
             "**More iterations / higher `-count`**: more stable numbers, but longer runs; balance confidence against time.",
             "**RunParallel**: reveals contention under concurrency, but measures a different thing than single-threaded ns/op — use it only when concurrency is the question.",
-            "**Optimising to the benchmark**: you can make a number look great on an unrealistic input and lose in production. Measure realistic sizes and shapes.",
+            "**Optimizing to the benchmark**: you can make a number look great on an unrealistic input and lose in production. Measure realistic sizes and shapes.",
           ],
         },
         {
@@ -432,7 +432,7 @@ export const goBenchmarks: Lesson = {
       ],
     },
     design: {
-      body: "A few durable rules. Measure before you optimise — write the benchmark first, get a baseline, then change the code and compare; a change with no measured win is not an optimisation. Keep the timed region pure: setup outside, result into a sink. And never trust one run — noise is real, so repeat and compare with a tool that understands variance rather than eyeballing two numbers.",
+      body: "A few durable rules. Measure before you optimize — write the benchmark first, get a baseline, then change the code and compare; a change with no measured win is not an optimization. Keep the timed region pure: setup outside, result into a sink. And never trust one run — noise is real, so repeat and compare with a tool that understands variance rather than eyeballing two numbers.",
       blocks: [
         {
           type: "points",
@@ -447,7 +447,7 @@ export const goBenchmarks: Lesson = {
           scenario: {
             title: "Proving a refactor is actually faster",
             context:
-              "You rewrote a serialisation function and believe it's faster. You run the benchmark once on the old code (5100 ns/op) and once on the new (4900 ns/op) and declare victory.",
+              "You rewrote a serialization function and believe it's faster. You run the benchmark once on the old code (5100 ns/op) and once on the new (4900 ns/op) and declare victory.",
             insight:
               "A 4% gap is well within run-to-run noise — you may have proved nothing. Run each with `-count=10`, save to old.txt and new.txt, and run `benchstat old.txt new.txt`. If benchstat reports the difference as insignificant, your 'win' was luck. Only claim a speed-up the tool confirms.",
           },
@@ -455,7 +455,7 @@ export const goBenchmarks: Lesson = {
       ],
     },
     ledgerflow: {
-      body: "In LedgerFlow, the hot path is posting a transaction and recomputing the affected balances — it runs on every write, so a few hundred nanoseconds and a couple of allocations there add up fast across a busy ledger. So that path gets a benchmark. We build a realistic transaction once, `b.ResetTimer()` to drop the setup, loop `b.N` times calling `post(tx)`, and assign the result to a package-level sink so the compiler can't optimise the posting away. We run it with `-benchmem` and watch `allocs/op` as closely as `ns/op`, because an accidental per-call allocation in the recompute step would quietly load the garbage collector under production traffic. When we change the path, we run the benchmark with `-count` on old and new code and let benchstat tell us whether the change is a real win — never a hunch.",
+      body: "In LedgerFlow, the hot path is posting a transaction and recomputing the affected balances — it runs on every write, so a few hundred nanoseconds and a couple of allocations there add up fast across a busy ledger. So that path gets a benchmark. We build a realistic transaction once, `b.ResetTimer()` to drop the setup, loop `b.N` times calling `post(tx)`, and assign the result to a package-level sink so the compiler can't optimize the posting away. We run it with `-benchmem` and watch `allocs/op` as closely as `ns/op`, because an accidental per-call allocation in the recompute step would quietly load the garbage collector under production traffic. When we change the path, we run the benchmark with `-count` on old and new code and let benchstat tell us whether the change is a real win — never a hunch.",
       blocks: [
         {
           type: "example",
