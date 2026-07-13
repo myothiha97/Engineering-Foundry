@@ -22,6 +22,13 @@ import {
   goGenerics,
   goModule3,
 } from "./module-3";
+import {
+  goErrorValues,
+  goErrorWrapping,
+  goPanicRecover,
+  goDependencyDirection,
+  goModule4,
+} from "./module-4";
 
 /**
  * Every authored Go lesson, in curriculum order. The workspace opens any lesson
@@ -45,6 +52,10 @@ export const goLessons: Lesson[] = [
   goAssertionsSwitches,
   goEmbedding,
   goGenerics,
+  goErrorValues,
+  goErrorWrapping,
+  goPanicRecover,
+  goDependencyDirection,
 ];
 
 export const goLessonsById: Record<string, Lesson> = Object.fromEntries(
@@ -57,4 +68,5 @@ export const goContentModules: CurriculumModule[] = [
   goModule1,
   goModule2,
   goModule3,
+  goModule4,
 ];
