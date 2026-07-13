@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark,
@@ -146,23 +147,88 @@ const exerciseTypeLabel: Record<string, string> = {
   advanced: "Challenge",
 };
 
-/** One problem the learner works: progressive hints, an optional answer reveal, self-attest. */
+/** Exercise types that demand a committed written answer before the reveal. */
+const gradedTypes = new Set(["prediction", "code-reading"]);
+/** Exercise types that open the code editor when a starter + reference exist. */
+const editorTypes = new Set(["implementation", "debugging", "refactoring"]);
+
+/**
+ * Honest local check for editor exercises: the learner's code must contain the
+ * reference solution's significant tokens. Purely deterministic text analysis —
+ * nothing is compiled or executed.
+ */
+function referenceTokenCheck(expected: string) {
+  const stop = new Set([
+    "func",
+    "return",
+    "package",
+    "import",
+    "var",
+    "const",
+    "type",
+    "string",
+    "int",
+    "int64",
+    "bool",
+    "error",
+    "nil",
+    "true",
+    "false",
+  ]);
+  const tokens = Array.from(new Set(expected.match(/[A-Za-z_][A-Za-z0-9_.]*/g) ?? [])).filter(
+    (t) => t.length > 2 && !stop.has(t),
+  );
+  return (code: string) => {
+    const missing = tokens.filter((t) => !code.includes(t));
+    return missing.length === 0
+      ? { passed: true, output: "deterministic check — every key element of the reference is present" }
+      : {
+          passed: false,
+          output: `deterministic check — still missing: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}`,
+        };
+  };
+}
+
+/**
+ * One problem the learner works, interactive per type. Prediction/code-reading
+ * require a committed answer before the reveal, then an honest self-assessment
+ * that grades the attempt (a miss routes the lesson to needs_review upstream).
+ * Implementation/debugging/refactoring open the editor with a deterministic
+ * reference check. Design/challenge types collect a sketch and self-attest.
+ */
 function ExerciseCard({
   index,
   exercise,
   done,
   onComplete,
+  onOutcome,
   variant,
 }: {
   index: number;
   exercise: Exercise;
   done: boolean;
   onComplete: () => void;
+  /** Graded outcome: reveal self-assessment or an editor check pass. */
+  onOutcome: (correct: boolean) => void;
   variant?: "challenge";
 }) {
   const [hintsShown, setHintsShown] = useState(0);
   const [answerShown, setAnswerShown] = useState(false);
+  const [attempt, setAttempt] = useState("");
+  const [assessed, setAssessed] = useState<"right" | "wrong" | null>(null);
   const hasMoreHints = hintsShown < exercise.hints.length;
+
+  const graded = gradedTypes.has(exercise.type) && Boolean(exercise.expectedAnswer);
+  const usesEditor =
+    editorTypes.has(exercise.type) &&
+    Boolean(exercise.starterCode) &&
+    Boolean(exercise.expectedAnswer);
+  const committed = attempt.trim().length > 0;
+
+  const assess = (correct: boolean) => {
+    setAssessed(correct ? "right" : "wrong");
+    onOutcome(correct);
+  };
 
   return (
     <div className={done ? "exercise-card done" : "exercise-card"} data-variant={variant}>
@@ -172,11 +238,40 @@ function ExerciseCard({
         {done && <Check size={15} className="exercise-check" />}
       </div>
       <p className="exercise-prompt">{exercise.prompt}</p>
-      {exercise.starterCode && (
-        <pre className="exercise-code">
-          <code>{exercise.starterCode}</code>
-        </pre>
+
+      {usesEditor ? (
+        <div className="exercise-editor">
+          <GoEditor
+            starter={exercise.starterCode ?? ""}
+            expected={exercise.expectedAnswer ?? ""}
+            test={referenceTokenCheck(exercise.expectedAnswer ?? "")}
+            onResult={(r) => {
+              if (r.passed && !done) onOutcome(true);
+            }}
+          />
+        </div>
+      ) : (
+        exercise.starterCode && (
+          <pre className="exercise-code">
+            <code>{exercise.starterCode}</code>
+          </pre>
+        )
       )}
+
+      {!usesEditor && !done && (
+        <textarea
+          className="exercise-attempt"
+          value={attempt}
+          onChange={(e) => setAttempt(e.target.value)}
+          placeholder={
+            graded
+              ? "Commit your answer before revealing — your first answer is the useful evidence…"
+              : "Sketch your approach before attesting…"
+          }
+          aria-label="Your answer"
+        />
+      )}
+
       {hintsShown > 0 && (
         <ul className="exercise-hints">
           {exercise.hints.slice(0, hintsShown).map((h, i) => (
@@ -190,18 +285,49 @@ function ExerciseCard({
           <p>{exercise.expectedAnswer}</p>
         </div>
       )}
+      {assessed && (
+        <div className={assessed === "right" ? "reveal correct" : "reveal"} role="status">
+          <strong>
+            {assessed === "right" ? "Correct — evidence recorded." : "Marked for review."}
+          </strong>{" "}
+          {assessed === "right"
+            ? "This exercise now counts toward mastery."
+            : "A wrong first answer is useful: this lesson is now flagged needs-review."}
+        </div>
+      )}
+
       <div className="exercise-actions">
-        {hasMoreHints && (
+        {hasMoreHints && !answerShown && (
           <button className="ghost-btn" onClick={() => setHintsShown((n) => n + 1)}>
             {hintsShown === 0 ? "Show hint" : "Next hint"}
           </button>
         )}
-        {exercise.expectedAnswer && !answerShown && (
+        {graded && !answerShown && (
+          <button
+            className="solid-btn"
+            disabled={!committed && !done}
+            title={committed || done ? undefined : "Type your answer first"}
+            onClick={() => setAnswerShown(true)}
+          >
+            Reveal answer
+          </button>
+        )}
+        {graded && answerShown && !assessed && !done && (
+          <>
+            <button className="solid-btn" onClick={() => assess(true)}>
+              I had it right
+            </button>
+            <button className="ghost-btn" onClick={() => assess(false)}>
+              I missed it
+            </button>
+          </>
+        )}
+        {!graded && !usesEditor && exercise.expectedAnswer && !answerShown && (
           <button className="ghost-btn" onClick={() => setAnswerShown(true)}>
             Reveal answer
           </button>
         )}
-        {!done && (
+        {!graded && !done && (
           <button className="solid-btn" onClick={onComplete}>
             Mark worked through
           </button>
@@ -464,7 +590,7 @@ function ResourcesHub() {
   );
 }
 
-export function GoWorkspace(props: { lessons: Lesson[] }) {
+export function GoWorkspace(props: { lessons: Lesson[]; initialTopicId?: string | undefined }) {
   return (
     <LearningProvider storageKey="go-runtime-lab">
       <Workspace {...props} />
@@ -472,7 +598,13 @@ export function GoWorkspace(props: { lessons: Lesson[] }) {
   );
 }
 
-function Workspace({ lessons }: { lessons: Lesson[] }) {
+function Workspace({
+  lessons,
+  initialTopicId,
+}: {
+  lessons: Lesson[];
+  initialTopicId?: string | undefined;
+}) {
   const {
     progress,
     completedLessons,
@@ -509,7 +641,9 @@ function Workspace({ lessons }: { lessons: Lesson[] }) {
     return goCurriculum.modules[0]?.topics[0]?.id ?? "";
   }, [lessonsById]);
 
-  const [selectedTopicId, setSelectedTopicId] = useState(lessonTopicId);
+  const [selectedTopicId, setSelectedTopicId] = useState(
+    initialTopicId && topicIndex.has(initialTopicId) ? initialTopicId : lessonTopicId,
+  );
   const [activeStage, setActiveStage] = useState<StageId>("problem");
   const [inspectorNode, setInspectorNode] = useState(pipeline[0]!);
   const [focus, setFocus] = useState(false);
@@ -697,6 +831,15 @@ function Workspace({ lessons }: { lessons: Lesson[] }) {
     requestAnimationFrame(tryScroll);
   }, [selectedTopicId, resourcesOpen]);
 
+  // Honor deep links (?topic=…) from the dashboard, review queue, and graph —
+  // also on client-side navigations back into the workspace.
+  useEffect(() => {
+    if (initialTopicId && topicIndex.has(initialTopicId)) {
+      setSelectedTopicId(initialTopicId);
+      setResourcesOpen(false);
+    }
+  }, [initialTopicId]);
+
   // ⌘K / Ctrl-K toggles the command palette.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -752,6 +895,21 @@ function Workspace({ lessons }: { lessons: Lesson[] }) {
     markExerciseComplete(lesson.id, id);
     recordEvidence(lesson.id, { exercisePassed: true });
     applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct: true });
+  };
+
+  // Graded outcome from a prediction reveal or an editor check. A miss still marks
+  // the exercise worked-through, but records no passing evidence and routes the
+  // lesson's progress to needs_review via the engine ladder.
+  const gradeExercise = (id: string, correct: boolean, isPrediction: boolean) => {
+    if (!lesson) return;
+    markExerciseComplete(lesson.id, id);
+    if (correct) {
+      recordEvidence(
+        lesson.id,
+        isPrediction ? { predictionCorrect: true, exercisePassed: true } : { exercisePassed: true },
+      );
+    }
+    applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct });
   };
 
   const toggleProjectMilestone = (key: string) => {
@@ -895,6 +1053,9 @@ function Workspace({ lessons }: { lessons: Lesson[] }) {
               exercise={exercise}
               done={completedExercises.has(exercise.id)}
               onComplete={() => completeExercise(exercise.id)}
+              onOutcome={(correct) =>
+                gradeExercise(exercise.id, correct, exercise.type === "prediction")
+              }
             />
           ))}
 
@@ -911,6 +1072,9 @@ function Workspace({ lessons }: { lessons: Lesson[] }) {
                   exercise={exercise}
                   done={completedExercises.has(exercise.id)}
                   onComplete={() => completeExercise(exercise.id)}
+                  onOutcome={(correct) =>
+                    gradeExercise(exercise.id, correct, exercise.type === "prediction")
+                  }
                   variant="challenge"
                 />
               ))}
@@ -1127,6 +1291,11 @@ function Workspace({ lessons }: { lessons: Lesson[] }) {
           >
             <ListTree size={17} />
           </button>
+          <nav className="top-links" aria-label="Lab destinations">
+            <Link href="/dashboard">Dashboard</Link>
+            <Link href="/concepts">Concepts</Link>
+            <Link href="/review">Review</Link>
+          </nav>
           <a href="http://localhost:3001" className="switch-app">
             Backend Atlas <ChevronRight size={14} />
           </a>
