@@ -16,7 +16,7 @@ export const goStackHeapEscape: Lesson = {
     "Understand where Go puts your values — the fast per-function stack or the shared, garbage-collected heap — and why deciding that is the compiler's job, not yours.",
   moduleId: "go-2",
   estimatedMinutes: 55,
-  difficulty: "beginner",
+  difficulty: "advanced",
   prerequisites: ["go-structs-pointers"],
   learningObjectives: [
     "Explain in plain words what the stack and the heap are and how each is reclaimed",
@@ -24,19 +24,15 @@ export const goStackHeapEscape: Lesson = {
     "Read `go build -gcflags=-m` output to confirm the compiler's escape decisions instead of guessing",
   ],
   concepts: ["stack", "heap", "escape-analysis", "garbage-collection"],
-  ledgerFlowApplications: [
-    "Keep a hot request path (loading a balance) allocation-light by returning small values instead of pointers where it's natural",
-    "Trust that returning a pointer to a freshly built Transaction is safe — Go moves it to the heap for you",
-    "Use escape analysis and a profile, never a hunch, before changing code to reduce allocations in LedgerFlow",
-  ],
   references: [
     {
       title: "Go FAQ: Should I define methods on values or pointers? (stack or heap)",
       url: "https://go.dev/doc/faq#stack_or_heap",
       teaches:
         "The official answer to 'where do my values live?' — that the compiler chooses, that a returned local is safe, and that you should not plan your code around it.",
-      relevance: "This is the canonical statement of the lesson's core message, straight from the Go team.",
-      required: true,
+      relevance:
+        "This is the canonical statement of the lesson's core message, straight from the Go team.",
+      required: false,
       section: "Stack or heap allocation; taking the address of a local variable",
     },
     {
@@ -44,8 +40,9 @@ export const goStackHeapEscape: Lesson = {
       url: "https://go.dev/doc/gc-guide",
       teaches:
         "How Go's concurrent mark-sweep garbage collector works, what it costs, and how (rarely) to tune it with GOGC/GOMEMLIMIT.",
-      relevance: "Backs the honest, brief GC overview and the 'you rarely tune it' point in this lesson.",
-      required: true,
+      relevance:
+        "Backs the honest, brief GC overview and the 'you rarely tune it' point in this lesson.",
+      required: false,
       section: "The GC cycle; Understanding costs; Optimization guide",
     },
     {
@@ -53,7 +50,8 @@ export const goStackHeapEscape: Lesson = {
       url: "https://go.dev/ref/spec#Allocation",
       teaches:
         "What `new` does and the normative guarantee that a value's storage lives as long as it is reachable.",
-      relevance: "Confirms that lifetime — not the keyword you used — is what makes returning a local pointer safe.",
+      relevance:
+        "Confirms that lifetime — not the keyword you used — is what makes returning a local pointer safe.",
       required: false,
       section: "Allocation; the built-in function new",
     },
@@ -119,7 +117,7 @@ export const goStackHeapEscape: Lesson = {
       id: "go2es-design-api-shape",
       type: "design",
       prompt:
-        "Design the return type for LedgerFlow's `LoadBalance` function: a small value (`Balance`) vs a pointer (`*Balance`). Choose one, justify it in terms of clarity first, and say what would make you switch.",
+        "Design the return type for a `LoadSettings` function: a small value (`Settings`) vs a pointer (`*Settings`). Choose one, justify it in terms of clarity first, and say what would make you switch.",
       hints: [
         "Small, always-present values are natural to return by value.",
         "Reach for a pointer when the value is large or genuinely optional (nil means 'none').",
@@ -188,80 +186,8 @@ export const goStackHeapEscape: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "Here's the model many newcomers bring, often from C: 'the stack is for local variables, the heap is for anything I allocate on purpose, and I have to be careful — if I return a pointer to a local variable, it becomes a dangling pointer to freed memory.' In C that fear is correct and important.\n\nIn Go it's simply not true, and acting on it leads people to write awkward code to 'avoid' something that was never a danger. The second naive move is the opposite over-correction: 'pointers are faster, so I'll return `*Thing` everywhere.' Both beliefs try to manage memory placement by hand, and both usually make the code worse without making it faster.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Returning a pointer to a local — safe in Go",
-            language: "go",
-            code: "type User struct{ Name string }\n\nfunc newUser(name string) *User {\n\tu := User{Name: name} // u is a local variable\n\treturn &u             // returning its address\n}\n\n// In C this would dangle. In Go it is completely safe:\n// the compiler sees u must outlive newUser and puts it on the heap.",
-            takeaway: "Go never lets you point at freed memory. If a local must outlive its function, Go moves it to the heap for you.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Go has no dangling-pointer trap: a returned local's memory stays valid.",
-            "'Pointers are always faster' is folklore — a returned pointer often *adds* heap work.",
-            "Both naive beliefs come from trying to place memory by hand.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "So what actually goes wrong? Not a crash — Go protects you from that. The failure is subtler: you spend effort *fighting the compiler* and end up with code that's harder to read and no faster, sometimes slower.\n\nA developer 'optimizes' by converting clean value-returning functions into pointer-returning ones, convinced it avoids copies. Every one of those returned pointers now forces its value onto the heap, and the heap is exactly what the garbage collector has to track and clean up. So the 'optimization' quietly *increases* garbage-collection pressure. Because nothing breaks, the mistake ships and lives in the codebase as confusing, pointer-heavy code that no benchmark ever justified.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The optimization that made things slower",
-            context:
-              "Every small helper was rewritten to return `*Result` instead of `Result` because 'pointers avoid copying'. A later benchmark showed the code allocated far more on the heap and the garbage collector ran more often.",
-            insight:
-              "Returning a pointer to a local forces it to escape to the heap. Copying a small struct on the stack is usually cheaper than allocating it on the heap and later collecting it.",
-          },
-        },
-        {
-          type: "note",
-          note: {
-            tone: "warning",
-            title: "The real failure mode",
-            text: "The danger here isn't a crash — it's wasted effort and murky code from optimizing by belief instead of by measurement.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Replace the folklore with one clean idea: **a value's lifetime decides where it lives.** If a value is only needed while its function runs, it can live on the stack and vanish the instant the function returns — no cleanup, no bookkeeping. If a value must outlive the function that made it — because a pointer to it is returned, stored somewhere lasting, or otherwise kept — it can't die when the function returns, so it goes on the heap where the garbage collector watches over it.\n\nThat's the whole intuition. You don't compute this by hand for every variable. You just remember: *does anything still need this value after the function returns?* If yes, expect the heap; if no, expect the stack.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "Stack vs heap at a glance",
-            kind: "compare",
-            nodes: [
-              { id: "stack", label: "Stack", detail: "per-goroutine, fast, auto-freed when the function returns", tone: "success" },
-              { id: "heap", label: "Heap", detail: "shared, freed later by the garbage collector", tone: "accent" },
-              { id: "short", label: "Short-lived value", detail: "used only inside the function → stack" },
-              { id: "long", label: "Out-living value", detail: "must survive the return → heap" },
-            ],
-            caption: "The question is never 'stack or heap?' directly — it's 'does this value outlive its function?'",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Lives only during the call → **stack** (reclaimed automatically on return).",
-            "Must outlive the call → **heap** (reclaimed later by the garbage collector).",
-            "You reason about *lifetime*; the compiler translates that into placement.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "Hold three facts and the rest follows.\n\nFirst, **each goroutine has its own stack** — a private stack of frames, one per active function call. When a function is called, a frame is pushed; when it returns, the frame is popped and everything in it is gone instantly. That's why the stack is fast: reclaiming is just moving a pointer back. Second, **the heap is shared** across the whole program, and values there are cleaned up by the **garbage collector (GC)** — a background helper that finds values nothing points to anymore and frees them. Third, **the compiler runs *escape analysis*** at build time to decide, per value, whether it can stay on the stack or must 'escape' to the heap.",
+      body: "Hold three facts and the rest follows.\n\nFirst, **each goroutine has its own stack** — a private stack of frames, one per active function call. When a function is called, a frame is pushed; when it returns, the frame is popped and everything in it is gone instantly. That's why the stack is fast: reclaiming is just moving a pointer back.\n\nSecond, **the heap is shared** across the whole program, and values there are cleaned up by the **garbage collector (GC)** — a background helper that finds values nothing points to anymore and frees them. Third, **the compiler runs *escape analysis*** at build time to decide, per value, whether it can stay on the stack or must 'escape' to the heap.",
       blocks: [
         {
           type: "note",
@@ -282,7 +208,7 @@ export const goStackHeapEscape: Lesson = {
       ],
     },
     mechanics: {
-      body: "Now the precise picture. A **stack frame** is the block of memory for one function call: its parameters, its local variables, and where to return to. Calls nest, so frames stack up; each return pops the top frame and reclaims its space in one cheap step. No value on the stack ever needs the garbage collector.\n\nEscape analysis asks, for each value the function creates: *can I prove this value is unreachable once the function returns?* If yes, it stays in the frame (stack). If it can't prove that — most commonly because the address of the value is returned or stored somewhere longer-lived — the value **escapes** and is allocated on the heap instead. The garbage collector then owns its lifetime: it periodically finds heap values that nothing references and frees them. Go's GC is a **concurrent mark-sweep** collector — it does most of its work alongside your running program, with only brief pauses — and it needs almost no tuning in normal apps.",
+      body: "Now the precise picture. A **stack frame** is the block of memory for one function call: its parameters, its local variables, and where to return to. Calls nest, so frames stack up; each return pops the top frame and reclaims its space in one cheap step. No value on the stack ever needs the garbage collector.\n\nEscape analysis asks, for each value the function creates: *can I prove this value is unreachable once the function returns? * If yes, it stays in the frame (stack). If it can't prove that — most commonly because the address of the value is returned or stored somewhere longer-lived — the value **escapes** and is allocated on the heap instead.\n\nThe garbage collector then owns its lifetime: it periodically finds heap values that nothing references and frees them. Go's GC is a **concurrent mark-sweep** collector — it does most of its work alongside your running program, with only brief pauses — and it needs almost no tuning in normal apps.",
       blocks: [
         {
           type: "diagram",
@@ -291,11 +217,27 @@ export const goStackHeapEscape: Lesson = {
             kind: "flow",
             nodes: [
               { id: "val", label: "new value", detail: "created inside a function" },
-              { id: "ask", label: "reachable after return?", detail: "escape analysis, at compile time", tone: "accent" },
-              { id: "stack", label: "stack", detail: "no → stays in the frame, freed on return", tone: "success" },
-              { id: "heap", label: "heap", detail: "yes → escapes, GC frees it later", tone: "danger" },
+              {
+                id: "ask",
+                label: "reachable after return?",
+                detail: "escape analysis, at compile time",
+                tone: "accent",
+              },
+              {
+                id: "stack",
+                label: "stack",
+                detail: "no → stays in the frame, freed on return",
+                tone: "success",
+              },
+              {
+                id: "heap",
+                label: "heap",
+                detail: "yes → escapes, GC frees it later",
+                tone: "danger",
+              },
             ],
-            caption: "Escape analysis is proof-based: unless it can prove the value dies with the function, the value goes to the heap to be safe.",
+            caption:
+              "Escape analysis is proof-based: unless it can prove the value dies with the function, the value goes to the heap to be safe.",
           },
         },
         {
@@ -317,11 +259,22 @@ export const goStackHeapEscape: Lesson = {
             title: "Two stack frames and the shared heap",
             kind: "stack",
             nodes: [
-              { id: "frame-newuser", label: "newUser frame (top)", detail: "local u — but its address escaped", tone: "muted" },
+              {
+                id: "frame-newuser",
+                label: "newUser frame (top)",
+                detail: "local u — but its address escaped",
+                tone: "muted",
+              },
               { id: "frame-main", label: "main frame", detail: "holds *User returned by newUser" },
-              { id: "heap-user", label: "heap: User{...}", detail: "the escaped value; freed by GC when unreferenced", tone: "danger" },
+              {
+                id: "heap-user",
+                label: "heap: User{...}",
+                detail: "the escaped value; freed by GC when unreferenced",
+                tone: "danger",
+              },
             ],
-            caption: "When newUser returns, its frame is popped — but the User itself lives safely on the heap because main still points to it.",
+            caption:
+              "When newUser returns, its frame is popped — but the User itself lives safely on the heap because main still points to it.",
           },
         },
       ],
@@ -335,7 +288,8 @@ export const goStackHeapEscape: Lesson = {
             title: "Reading escape decisions with -gcflags=-m",
             language: "go",
             code: 'package main\n\nimport "fmt"\n\ntype User struct{ Name string }\n\nfunc makeEscapes(name string) *User {\n\tu := User{Name: name}\n\treturn &u // address returned → must outlive the call\n}\n\nfunc staysOnStack(name string) int {\n\tu := User{Name: name}\n\treturn len(u.Name) // u never leaves the function\n}\n\nfunc main() {\n\tfmt.Println(makeEscapes("Ada").Name, staysOnStack("Ada"))\n}\n\n// $ go build -gcflags=-m ./main.go\n// ./main.go:8:2: moved to heap: u        <- makeEscapes\n// ./main.go:14:2: u does not escape      <- staysOnStack',
-            takeaway: "One line of code — returning `&u` — is the entire difference. The `-m` output confirms it so you never have to guess.",
+            takeaway:
+              "One line of code — returning `&u` — is the entire difference. The `-m` output confirms it so you never have to guess.",
           },
         },
         {
@@ -370,7 +324,8 @@ export const goStackHeapEscape: Lesson = {
             title: "An escape is not a failure",
             language: "go",
             code: "// This SHOULD escape — the caller needs the value afterward.\nfunc loadConfig() *Config {\n\tc := Config{Env: \"prod\"}\n\treturn &c // correct: c genuinely outlives loadConfig\n}\n\n// 'Fixing' this escape would mean not returning the value at all,\n// which defeats the function's purpose.",
-            takeaway: "Escaping is the compiler doing its job. Only care about it when a profile says allocations in this path actually cost you.",
+            takeaway:
+              "Escaping is the compiler doing its job. Only care about it when a profile says allocations in this path actually cost you.",
           },
         },
       ],
@@ -419,31 +374,6 @@ export const goStackHeapEscape: Lesson = {
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "Here's the lesson applied to the project you'll build. LedgerFlow has request paths that run on every page load — loading an account balance, listing recent transactions. On those **hot paths** (code that runs very frequently), fewer heap allocations means less garbage-collection work and steadier latency. But the way you get there is *not* by scattering pointers on a hunch. You write the clearest code, and when a request path is genuinely hot, you check `-gcflags=-m` and a profile to see where allocations come from, then trim only what the measurement flags.\n\nConcretely: returning a freshly built `*Transaction` from a constructor is fine and safe — it correctly escapes because the caller keeps it. But a small `Balance` that the caller reads and discards is natural to return by value, keeping that hot read allocation-light. The discipline is 'clarity first, measurement before tuning', exactly as Go intends.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Clarity first on a hot read path",
-            language: "go",
-            code: "type Balance struct{ Cents int64 }\n\n// Hot path: read a balance many times per second.\n// Returning a small value by value keeps it on the stack — no heap churn.\nfunc LoadBalance(accountCents int64) Balance {\n\treturn Balance{Cents: accountCents}\n}\n\n// Constructor that genuinely hands ownership to the caller:\n// escaping to the heap here is correct, not a problem.\nfunc NewTransaction(amountCents int64, note string) *Transaction {\n\tt := Transaction{AmountC: amountCents, Note: note}\n\treturn &t\n}",
-            takeaway: "By-value for a small hot result, pointer where the caller truly needs to own the value — both are clear, and both let the compiler do the right thing.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Hot paths benefit from fewer heap allocations, but only trim what a profile flags.",
-            "Returning `*Transaction` from a constructor is a correct, safe escape.",
-            "Small, throwaway results (a `Balance`) are natural to return by value.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize this' into 'I can predict and prove it'. Work across prediction, code-reading, implementation, debugging, refactoring, and design — plus one advanced task that has you *prove* an escape with `-gcflags=-m`. Each type produces different evidence, so finishing one doesn't cover the rest.",
     },
     mastery: {
       body: "You've mastered this lesson when you can do four things without notes: explain what the stack and heap are and why returning a local pointer is safe in Go, predict whether a simple value escapes and give the lifetime reason, use `go build -gcflags=-m` to confirm a decision instead of guessing, and defend a value-vs-pointer choice on clarity grounds while naming the profiling evidence that would change it. Check a criterion only when you genuinely have that evidence — reading the stage doesn't count.",

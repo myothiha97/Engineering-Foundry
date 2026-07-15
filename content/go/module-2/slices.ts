@@ -23,32 +23,31 @@ export const goSlices: Lesson = {
     "Use s[i:j:k] and copy to hand out slice data without aliasing the original",
   ],
   concepts: ["arrays", "slices", "backing-array", "append", "aliasing"],
-  ledgerFlowApplications: [
-    "Batch pending transactions in a slice without one batch corrupting another",
-    "Return a copy of a slice from a store so callers can't mutate internal state",
-    "Cap capacity with s[i:j:k] before handing a sub-slice to code that appends",
-  ],
   references: [
     {
       title: "Go Slices: usage and internals — The Go Blog",
       url: "https://go.dev/blog/slices-intro",
-      teaches: "How arrays and slices relate, the slice header, and how slicing shares a backing array.",
-      relevance: "The gentlest official walkthrough of exactly the mental model this lesson builds.",
-      required: true,
+      teaches:
+        "How arrays and slices relate, the slice header, and how slicing shares a backing array.",
+      relevance:
+        "The gentlest official walkthrough of exactly the mental model this lesson builds.",
+      required: false,
       section: "Arrays; Slices; Slice internals",
     },
     {
       title: "Arrays, slices (and strings): The mechanics of 'append' — The Go Blog",
       url: "https://go.dev/blog/slices",
       teaches: "Exactly how append grows a slice and when it allocates a new backing array.",
-      relevance: "The authoritative explanation behind this lesson's reallocation and aliasing stages.",
-      required: true,
+      relevance:
+        "The authoritative explanation behind this lesson's reallocation and aliasing stages.",
+      required: false,
       section: "The anatomy of append; Growing slices",
     },
     {
       title: "The Go Programming Language Specification: Slice types",
       url: "https://go.dev/ref/spec#Slice_types",
-      teaches: "The normative rules for slice length, capacity, and the three-index slice expression.",
+      teaches:
+        "The normative rules for slice length, capacity, and the three-index slice expression.",
       relevance: "Confirms the s[i:j:k] capacity rule is a language guarantee, not a convention.",
       required: false,
       section: "Slice types; Slice expressions",
@@ -60,15 +59,22 @@ export const goSlices: Lesson = {
       type: "prediction",
       prompt:
         "Given `a := []int{1, 2, 3, 4}` and `b := a[0:2]`, then `b = append(b, 99)`, predict what `a` prints afterward and explain why.",
-      expectedAnswer: "a prints [1 2 99 4] — b had spare capacity, so append overwrote a[2] in the shared backing array.",
-      hints: ["b's length is 2 but what is its capacity?", "append writes into spare capacity before it ever reallocates."],
+      expectedAnswer:
+        "a prints [1 2 99 4] — b had spare capacity, so append overwrote a[2] in the shared backing array.",
+      hints: [
+        "b's length is 2 but what is its capacity?",
+        "append writes into spare capacity before it ever reallocates.",
+      ],
     },
     {
       id: "go2sl-read-header",
       type: "code-reading",
       prompt:
         "Read `s := make([]int, 2, 8)`. State the length, the capacity, and how many more elements you can append before append must reallocate.",
-      hints: ["make([]T, len, cap) sets both.", "Reallocation happens only when length would exceed capacity."],
+      hints: [
+        "make([]T, len, cap) sets both.",
+        "Reallocation happens only when length would exceed capacity.",
+      ],
     },
     {
       id: "go2sl-implement-safeslice",
@@ -79,60 +85,78 @@ export const goSlices: Lesson = {
         'package main\n\nimport "fmt"\n\nfunc clone(src []int) []int {\n  // return a copy that shares no backing array with src\n  return nil\n}\n\nfunc main() {\n  a := []int{1, 2, 3}\n  b := clone(a)\n  b[0] = 99\n  fmt.Println(a, b) // want: [1 2 3] [99 2 3]\n}',
       expectedAnswer:
         "func clone(src []int) []int { dst := make([]int, len(src)); copy(dst, src); return dst }",
-      hints: ["make a destination of len(src).", "copy(dst, src) copies element-by-element into fresh memory."],
+      hints: [
+        "make a destination of len(src).",
+        "copy(dst, src) copies element-by-element into fresh memory.",
+      ],
     },
     {
       id: "go2sl-debug-append",
       type: "debugging",
       prompt:
         "A function does `func firstTwo(s []int) []int { return append(s[:2], -1) }`. Callers report their original slice gets a stray -1 in it. Explain the bug and fix it.",
-      hints: ["s[:2] still points at the caller's backing array.", "Cap the capacity with a three-index slice, or copy first."],
+      hints: [
+        "s[:2] still points at the caller's backing array.",
+        "Cap the capacity with a three-index slice, or copy first.",
+      ],
     },
     {
       id: "go2sl-refactor-batch",
       type: "refactoring",
       prompt:
         "A batching function slices a shared buffer with `batch := buf[start:end]` and appends to it. Refactor so each batch is safe to append to without touching the shared buffer.",
-      hints: ["Give each batch its own capacity limit with buf[start:end:end].", "Or copy the range into a fresh slice."],
+      hints: [
+        "Give each batch its own capacity limit with buf[start:end:end].",
+        "Or copy the range into a fresh slice.",
+      ],
     },
     {
       id: "go2sl-design-nil",
       type: "design",
       prompt:
-        "Decide whether a LedgerFlow function that finds no matching transactions should return a nil slice or an empty non-nil slice, and state what evidence would change your choice.",
-      hints: ["Both have length 0 and both range/append fine.", "Does the JSON encoder or a caller distinguish null from []?"],
+        "Decide whether a search function with no matching books should return a nil slice or an empty non-nil slice, and state what evidence would change your choice.",
+      hints: [
+        "Both have length 0 and both range/append fine.",
+        "Does the JSON encoder or a caller distinguish null from []?",
+      ],
     },
     {
       id: "go2sl-advanced-grow",
       type: "advanced",
       prompt:
         "Write a short program that appends to a slice in a loop and prints len and cap each iteration. Explain the capacity pattern you observe and why append over-allocates instead of growing by one.",
-      hints: ["Print len(s), cap(s) after each append.", "Amortized growth: doubling keeps total copying cost linear."],
+      hints: [
+        "Print len(s), cap(s) after each append.",
+        "Amortized growth: doubling keeps total copying cost linear.",
+      ],
     },
   ],
   masteryCriteria: [
     {
       id: "explain-header",
       kind: "explain",
-      description: "Explain in plain words what a slice header holds and how it points at a backing array.",
+      description:
+        "Explain in plain words what a slice header holds and how it points at a backing array.",
       required: true,
     },
     {
       id: "predict-realloc",
       kind: "predict",
-      description: "Correctly predict when append writes into shared memory versus reallocating a new backing array.",
+      description:
+        "Correctly predict when append writes into shared memory versus reallocating a new backing array.",
       required: true,
     },
     {
       id: "implement-copy",
       kind: "implement",
-      description: "Write code that hands out slice data without aliasing the original, using copy or a three-index slice.",
+      description:
+        "Write code that hands out slice data without aliasing the original, using copy or a three-index slice.",
       required: true,
     },
     {
       id: "design-slice-api",
       kind: "design",
-      description: "Defend a slice-returning API choice (copy vs share, nil vs empty) for LedgerFlow.",
+      description: "Defend a slice-returning API choice: copy vs share and nil vs empty.",
       required: false,
     },
   ],
@@ -158,75 +182,6 @@ export const goSlices: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "Here's the model most newcomers bring from other languages: 'a slice is a list, and each list is its own separate thing. If I take a piece of one list, I get a fresh copy of that piece.'\n\nThat is wrong in Go, and the wrongness is the whole lesson. Slicing does **not** copy the data. When you write `b := a[0:2]`, `b` is a new *window* onto `a`'s existing storage — not a new list. And `append` sometimes writes into that shared storage and sometimes moves to fresh storage, depending on a number you usually never see: the capacity.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Slicing shares memory — it does not copy",
-            language: "go",
-            code: 'a := []int{1, 2, 3, 4}\nb := a[0:2]   // b is a window onto a, not a copy\nb[0] = 99\n\nfmt.Println(a) // [99 2 3 4]  <- a changed too!\nfmt.Println(b) // [99 2]',
-            takeaway: "Writing through b changed a, because b and a point at the same backing array. Slicing is a view, not a copy.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "`a[i:j]` creates a **view**, sharing memory with `a` — not a copy.",
-            "To actually copy, you need `copy` or `make` (covered later) — slicing alone never does.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The painful version of this shows up with `append`. You take a sub-slice of a list, append to it, and — without touching the original list — the original silently changes. This is the **aliasing trap**, and it produces bugs that look impossible: data changes in a variable no line of your code appears to modify.\n\nIt happens because `append` first tries to use the sub-slice's *spare capacity*. If that spare capacity is really the parent's memory, `append` overwrites the parent's elements in place. Nothing warns you. The program keeps running with quietly corrupted data.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "append into a sub-slice overwrites the parent",
-            language: "go",
-            code: 'a := []int{1, 2, 3, 4}\nb := a[0:2]          // len 2, but capacity 4 (borrowed from a)\n\nb = append(b, 99)    // writes into a[2] — the spare capacity!\n\nfmt.Println(a) // [1 2 99 4]  <- a[2] was silently overwritten\nfmt.Println(b) // [1 2 99]',
-            takeaway: "append had room in the shared backing array, so it wrote 99 over a[2]. b never looked like it touched a — but it did.",
-          },
-        },
-        {
-          type: "scenario",
-          scenario: {
-            title: "The batch that ate its neighbor",
-            context:
-              "A service slices a shared buffer into batches and appends a trailing marker to each batch before sending. The last element of every batch mysteriously ends up as the first element of the next batch.",
-            insight: "Each batch had spare capacity reaching into the next batch's region. append wrote the marker over the neighbor's data — a classic aliasing corruption.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "To make this predictable, stop thinking of a slice as 'the data' and start thinking of it as a small **label** that describes where the data lives. The data itself sits in a plain fixed-size **array** somewhere in memory. The slice is just three facts written on a sticky note pointing at that array.\n\nThose three facts are: where the data starts (a **pointer**), how many elements you can currently see (the **length**), and how many elements fit before the array runs out (the **capacity**). Copy the sticky note and you get a second note pointing at the *same* array. That is why two slices can share data.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "A slice is a label pointing at an array",
-            kind: "compare",
-            nodes: [
-              { id: "slice", label: "The slice (header)", detail: "pointer + length + capacity — a tiny 3-field note", tone: "accent" },
-              { id: "array", label: "The backing array", detail: "the real, fixed-size block of elements in memory" },
-            ],
-            caption: "The slice describes a window; the backing array holds the bytes. Many slices can describe the same array.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "An **array** is a fixed-size block of elements — its size is part of its type (`[4]int`).",
-            "A **slice** is a lightweight header — pointer, length, capacity — describing a window onto an array.",
-            "Copying a slice copies only the header, so both copies point at the same backing array.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
       body: "Keep this one picture and nearly everything about slices follows. A slice header is three fields: **ptr** (where the window starts), **len** (how many elements are in view), and **cap** (how many elements exist from ptr to the end of the backing array).\n\n`append` follows a single rule against these three fields: if `len < cap`, there's spare room, so it writes the new element into the backing array *in place* and returns a header with `len` one larger — still the same array, still shared. If `len == cap`, there's no room, so it allocates a **brand-new, bigger backing array**, copies everything over, and returns a header pointing at the new array — now *unshared*. Reallocation is the exact moment two slices stop sharing.",
       blocks: [
@@ -243,8 +198,9 @@ export const goSlices: Lesson = {
           example: {
             title: "len, cap, and the two outcomes of append",
             language: "go",
-            code: 's := make([]int, 2, 3) // len 2, cap 3 → one spare slot\nfmt.Println(len(s), cap(s)) // 2 3\n\ns = append(s, 10) // len 2 < cap 3: writes in place, still same array\nfmt.Println(len(s), cap(s)) // 3 3\n\ns = append(s, 20) // len 3 == cap 3: REALLOCATES a bigger array\nfmt.Println(len(s), cap(s)) // 4 6 (new, larger backing array)',
-            takeaway: "The first append reused memory; the second had no room and moved to a fresh, larger array. cap tells you which will happen.",
+            code: "s := make([]int, 2, 3) // len 2, cap 3 → one spare slot\nfmt.Println(len(s), cap(s)) // 2 3\n\ns = append(s, 10) // len 2 < cap 3: writes in place, still same array\nfmt.Println(len(s), cap(s)) // 3 3\n\ns = append(s, 20) // len 3 == cap 3: REALLOCATES a bigger array\nfmt.Println(len(s), cap(s)) // 4 6 (new, larger backing array)",
+            takeaway:
+              "The first append reused memory; the second had no room and moved to a fresh, larger array. cap tells you which will happen.",
           },
         },
       ],
@@ -259,11 +215,27 @@ export const goSlices: Lesson = {
             kind: "flow",
             nodes: [
               { id: "app", label: "append(s, x)", detail: "add one element" },
-              { id: "check", label: "len < cap?", detail: "is there spare capacity?", tone: "accent" },
-              { id: "reuse", label: "reuse array", detail: "write in place, len+1 — still shared", tone: "success" },
-              { id: "grow", label: "reallocate", detail: "new bigger array, copy, len+1 — now unshared", tone: "danger" },
+              {
+                id: "check",
+                label: "len < cap?",
+                detail: "is there spare capacity?",
+                tone: "accent",
+              },
+              {
+                id: "reuse",
+                label: "reuse array",
+                detail: "write in place, len+1 — still shared",
+                tone: "success",
+              },
+              {
+                id: "grow",
+                label: "reallocate",
+                detail: "new bigger array, copy, len+1 — now unshared",
+                tone: "danger",
+              },
             ],
-            caption: "len < cap → reuse the shared backing array. len == cap → allocate a new one and stop sharing.",
+            caption:
+              "len < cap → reuse the shared backing array. len == cap → allocate a new one and stop sharing.",
           },
         },
         {
@@ -271,8 +243,9 @@ export const goSlices: Lesson = {
           example: {
             title: "Capacity carries past the length; the third index caps it",
             language: "go",
-            code: 'a := []int{1, 2, 3, 4, 5}\n\nb := a[1:3]      // len 2, cap 4  (reaches to end of a)\nfmt.Println(len(b), cap(b)) // 2 4\n\nc := a[1:3:3]    // len 2, cap 2  (third index caps capacity)\nfmt.Println(len(c), cap(c)) // 2 2',
-            takeaway: "b can append into a's memory (cap 4); c cannot (cap 2), so appending to c forces a reallocation instead of touching a.",
+            code: "a := []int{1, 2, 3, 4, 5}\n\nb := a[1:3]      // len 2, cap 4  (reaches to end of a)\nfmt.Println(len(b), cap(b)) // 2 4\n\nc := a[1:3:3]    // len 2, cap 2  (third index caps capacity)\nfmt.Println(len(c), cap(c)) // 2 2",
+            takeaway:
+              "b can append into a's memory (cap 4); c cannot (cap 2), so appending to c forces a reallocation instead of touching a.",
           },
         },
         {
@@ -294,12 +267,27 @@ export const goSlices: Lesson = {
             title: "Two slices, one backing array",
             kind: "stack",
             nodes: [
-              { id: "arr", label: "backing array [1 2 3 4]", detail: "the real memory both slices point into" },
+              {
+                id: "arr",
+                label: "backing array [1 2 3 4]",
+                detail: "the real memory both slices point into",
+              },
               { id: "a", label: "a — ptr=0, len=4, cap=4", detail: "sees all four elements" },
-              { id: "b", label: "b = a[0:2] — ptr=0, len=2, cap=4", detail: "sees two, but capacity spans all four", tone: "accent" },
-              { id: "app", label: "append(b, 99) writes index 2", detail: "index 2 is inside a's view → a sees 99", tone: "danger" },
+              {
+                id: "b",
+                label: "b = a[0:2] — ptr=0, len=2, cap=4",
+                detail: "sees two, but capacity spans all four",
+                tone: "accent",
+              },
+              {
+                id: "app",
+                label: "append(b, 99) writes index 2",
+                detail: "index 2 is inside a's view → a sees 99",
+                tone: "danger",
+              },
             ],
-            caption: "b's length is 2, but its capacity (4) reaches into a's data — so appending through b overwrites what a sees.",
+            caption:
+              "b's length is 2, but its capacity (4) reaches into a's data — so appending through b overwrites what a sees.",
           },
         },
       ],
@@ -313,7 +301,8 @@ export const goSlices: Lesson = {
             title: "Two safe ways to hand out slice data",
             language: "go",
             code: 'package main\n\nimport "fmt"\n\nfunc clone(src []int) []int {\n    dst := make([]int, len(src)) // fresh backing array\n    copy(dst, src)               // element-by-element copy\n    return dst                   // shares nothing with src\n}\n\nfunc main() {\n    a := []int{1, 2, 3, 4}\n\n    safe := clone(a[0:2]) // independent copy\n    safe = append(safe, 99)\n    fmt.Println(a)        // [1 2 3 4]  <- untouched\n\n    capped := a[0:2:2]    // cap == len, so append must reallocate\n    capped = append(capped, 77)\n    fmt.Println(a)        // [1 2 3 4]  <- still untouched\n}',
-            takeaway: "clone copies into new memory; a[0:2:2] caps capacity so any append reallocates instead of overwriting a. Both keep a safe.",
+            takeaway:
+              "clone copies into new memory; a[0:2:2] caps capacity so any append reallocates instead of overwriting a. Both keep a safe.",
           },
         },
         {
@@ -321,13 +310,14 @@ export const goSlices: Lesson = {
           items: [
             "`copy(dst, src)` copies min(len(dst), len(src)) elements into dst's own memory.",
             "`make([]T, n)` then `copy` = a fully independent duplicate.",
+            "`clear(s)` resets every element to its zero value without changing the slice's length or capacity.",
             "`s[i:j:j]` caps capacity to the length, so the receiver's append can never touch your data.",
           ],
         },
       ],
     },
     experiment: {
-      body: "Before reading on, commit to a prediction — a corrected wrong guess sticks far better than a right answer you skimmed. Consider:\n\n`a := []int{1, 2, 3, 4}`\n`b := a[0:2]`\n`b = append(b, 100)`\n`b = append(b, 200)`\n\nAfter these two appends, what does `a` print? Decide now, then reveal.\n\nThe answer is **[1 2 100 200]**. Walk it through: `b` starts with len 2, cap 4. The first `append(b, 100)` has spare room (2 < 4), so it writes `100` into `a[2]` in place — `a` becomes `[1 2 100 4]`. The second `append(b, 200)` now has len 3, cap 4, still room, so it writes `200` into `a[3]` — `a` becomes `[1 2 100 200]`. The lesson: because capacity was 4, *both* appends fit in the shared array, and both overwrote `a`. As long as capacity holds, every append keeps corrupting the parent — the danger doesn't stop after one write. Only when capacity is finally exceeded does `b` reallocate and leave `a` alone.",
+      body: "Before reading on, commit to a prediction — a corrected wrong guess sticks far better than a right answer you skimmed. Consider:\n\n`a := []int{1, 2, 3, 4}`\n`b := a[0:2]`\n`b = append(b, 100)`\n`b = append(b, 200)`\n\nAfter these two appends, what does `a` print? Decide now, then reveal.\n\nThe answer is **[1 2 100 200]**. Walk it through: `b` starts with len 2, cap 4. The first `append(b, 100)` has spare room (2 < 4), so it writes `100` into `a[2]` in place — `a` becomes `[1 2 100 4]`. The second `append(b, 200)` now has len 3, cap 4, still room, so it writes `200` into `a[3]` — `a` becomes `[1 2 100 200]`.\n\nThe lesson: because capacity was 4, *both* appends fit in the shared array, and both overwrote `a`. As long as capacity holds, every append keeps corrupting the parent — the danger doesn't stop after one write. Only when capacity is finally exceeded does `b` reallocate and leave `a` alone.",
     },
     "failure-cases": {
       body: "Nearly every slice bug at this level traces to one root: assuming slices are independent when they still share a backing array. Here are the ones you'll actually meet, and the signal each gives.",
@@ -347,8 +337,9 @@ export const goSlices: Lesson = {
           example: {
             title: "A big array kept alive by a tiny slice",
             language: "go",
-            code: 'func firstByte(huge []byte) []byte {\n    return huge[0:1] // shares huge\'s backing array\n    // huge (maybe megabytes) cannot be garbage-collected\n    // while this 1-element slice is alive!\n}\n\n// Fix: copy the bytes you actually need out.\nfunc firstByteSafe(huge []byte) []byte {\n    out := make([]byte, 1)\n    copy(out, huge)\n    return out // huge is now free to be collected\n}',
-            takeaway: "A slice keeps its entire backing array alive. Copy out small pieces so the large original can be freed.",
+            code: "func firstByte(huge []byte) []byte {\n    return huge[0:1] // shares huge's backing array\n    // huge (maybe megabytes) cannot be garbage-collected\n    // while this 1-element slice is alive!\n}\n\n// Fix: copy the bytes you actually need out.\nfunc firstByteSafe(huge []byte) []byte {\n    out := make([]byte, 1)\n    copy(out, huge)\n    return out // huge is now free to be collected\n}",
+            takeaway:
+              "A slice keeps its entire backing array alive. Copy out small pieces so the large original can be freed.",
           },
         },
       ],
@@ -382,39 +373,16 @@ export const goSlices: Lesson = {
           type: "scenario",
           scenario: {
             title: "A store that can't be corrupted from outside",
-            context: "A transaction store keeps its records in an internal slice. A handler asks for the list, then appends a temporary marker to what it received before rendering.",
-            insight: "If the store returns its live slice, the handler's append can overwrite real records. Returning a copy makes the store immune to whatever callers do.",
+            context:
+              "A transaction store keeps its records in an internal slice. A handler asks for the list, then appends a temporary marker to what it received before rendering.",
+            insight:
+              "If the store returns its live slice, the handler's append can overwrite real records. Returning a copy makes the store immune to whatever callers do.",
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "Here's the whole lesson applied to the project you'll build. LedgerFlow batches pending transactions before writing them, and it reads lists of transactions out of its store. Both are slice operations, and both are exactly where aliasing bugs would corrupt money data. So LedgerFlow follows two rules: the store returns a **copy** of its internal slice so a handler can never mutate stored records, and the batcher caps each batch's capacity so appending a batch marker can't spill into the next batch's transactions.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "A store that hands out safe copies",
-            language: "go",
-            code: 'type Store struct {\n    txns []Transaction // internal state — never leaked directly\n}\n\n// List returns a copy so callers can append/mutate freely\n// without ever touching the store\'s own slice.\nfunc (s *Store) List() []Transaction {\n    out := make([]Transaction, len(s.txns))\n    copy(out, s.txns)\n    return out\n}\n\n// Batch caps capacity so appending a marker to one batch\n// can never overwrite the next batch\'s transactions.\nfunc batch(all []Transaction, start, end int) []Transaction {\n    return all[start:end:end] // cap == len: append reallocates\n}',
-            takeaway: "Copy on the way out, cap capacity on sub-slices — and no caller can ever corrupt LedgerFlow's transaction data through aliasing.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Store reads return a copy — internal records stay immune to caller mutation.",
-            "Batches use `all[start:end:end]` so append can't spill into a neighbor.",
-            "Money data is never exposed as a live, shareable backing array.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize this' into 'I can predict and build this'. Work across prediction, code-reading, implementation, debugging, refactoring, and design — each produces a different kind of evidence, so finishing one doesn't cover the rest. Pay special attention to the prediction and debugging exercises: the aliasing trap only becomes instinct once you've been burned by it on purpose.",
     },
     mastery: {
-      body: "You've mastered this lesson when you can do four things without notes: explain what a slice header holds and how it points at a backing array, predict whether a given append will reuse shared memory or reallocate, write code that hands out slice data without aliasing (using copy or a three-index slice), and defend a slice-API choice for LedgerFlow. Check a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
+      body: "You understand this lesson when you can explain what a slice header holds, predict when `append` will reuse an array, and return slice data without accidental sharing. Check a criterion only when you can demonstrate it without copying the lesson.",
     },
     summary: {
       body: "One picture carries this whole lesson: **a slice is a three-field header — pointer, length, capacity — describing a window onto a shared backing array.** Keep that in mind and the 'magic' disappears entirely.",

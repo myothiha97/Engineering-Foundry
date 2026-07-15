@@ -15,39 +15,38 @@ export const goStructsPointers: Lesson = {
   moduleId: "go-2",
   estimatedMinutes: 60,
   difficulty: "beginner",
-  prerequisites: ["go-copy-semantics"],
+  prerequisites: ["go-basic-types"],
   learningObjectives: [
     "Define a struct and build one with a composite literal",
     "Explain what &x, *p, and *T mean and why field access through a pointer needs no *",
     "Choose a value or pointer receiver deliberately and say why",
   ],
   concepts: ["structs", "pointers", "receivers"],
-  ledgerFlowApplications: [
-    "Model an Account as a struct grouping its ID, balance, and status in one value",
-    "Give Account a Deposit method with a pointer receiver so the balance actually changes",
-    "Keep read-only reporting methods on value receivers so they can't corrupt a record",
-  ],
   references: [
     {
       title: "A Tour of Go: Structs",
       url: "https://go.dev/tour/moretypes/1",
-      teaches: "Declaring structs, building them with composite literals, and accessing fields through a pointer.",
-      relevance: "The gentlest official walkthrough of exactly the struct and pointer material in this lesson.",
-      required: true,
+      teaches:
+        "Declaring structs, building them with composite literals, and accessing fields through a pointer.",
+      relevance:
+        "The gentlest official walkthrough of exactly the struct and pointer material in this lesson.",
+      required: false,
       section: "Structs; Pointers to structs; Struct literals",
     },
     {
       title: "A Tour of Go: Methods and pointer receivers",
       url: "https://go.dev/tour/methods/4",
-      teaches: "Why a pointer receiver can modify the value it points to and a value receiver cannot.",
+      teaches:
+        "Why a pointer receiver can modify the value it points to and a value receiver cannot.",
       relevance: "Backs the central value-vs-pointer receiver decision of this lesson.",
-      required: true,
+      required: false,
       section: "Pointer receivers; Methods with value receivers",
     },
     {
       title: "Effective Go — Pointers vs. Values",
       url: "https://go.dev/doc/effective_go#pointers_vs_values",
-      teaches: "The idiomatic rule of thumb for choosing a receiver type and staying consistent per type.",
+      teaches:
+        "The idiomatic rule of thumb for choosing a receiver type and staying consistent per type.",
       relevance: "The authoritative source for the 'be consistent per type' design guidance.",
       required: false,
       section: "Pointers vs. Values",
@@ -68,7 +67,10 @@ export const goStructsPointers: Lesson = {
       type: "code-reading",
       prompt:
         "Given `p := &acct` (so p is a *Account), read `p.BalanceC = 100`. Explain what Go is really doing, and why you don't have to write `(*p).BalanceC`.",
-      hints: ["Go auto-dereferences a pointer when you access a field through it.", "`p.BalanceC` is shorthand for `(*p).BalanceC`."],
+      hints: [
+        "Go auto-dereferences a pointer when you access a field through it.",
+        "`p.BalanceC` is shorthand for `(*p).BalanceC`.",
+      ],
     },
     {
       id: "go2st-implement-deposit",
@@ -77,8 +79,7 @@ export const goStructsPointers: Lesson = {
         "Implement Deposit so the caller's account balance actually increases. Choose the receiver type that makes the change persist.",
       starterCode:
         'package main\n\nimport "fmt"\n\ntype Account struct {\n  ID       string\n  BalanceC int64 // balance in cents\n}\n\n// Deposit should add c cents to the account\'s balance.\nfunc (a Account) Deposit(c int64) {\n  a.BalanceC += c\n}\n\nfunc main() {\n  acct := Account{ID: "a1", BalanceC: 1000}\n  acct.Deposit(500)\n  fmt.Println(acct.BalanceC) // want: 1500\n}',
-      expectedAnswer:
-        'func (a *Account) Deposit(c int64) {\n  a.BalanceC += c\n}',
+      expectedAnswer: "func (a *Account) Deposit(c int64) {\n  a.BalanceC += c\n}",
       hints: [
         "A value receiver is a copy; writes to it vanish when the method returns.",
         "Change `(a Account)` to `(a *Account)` — Go takes the address of acct for you at the call site.",
@@ -88,60 +89,75 @@ export const goStructsPointers: Lesson = {
       id: "go2st-debug-literal",
       type: "debugging",
       prompt:
-        "`acct := Account{\"a1\", 1000, true}` fails to compile after a new field is added between BalanceC and the bool. Explain why positional literals are fragile and fix it.",
-      hints: ["A positional literal must list every field in declaration order.", "Use a keyed literal like `Account{ID: \"a1\", BalanceC: 1000, Active: true}`."],
+        '`acct := Account{"a1", 1000, true}` fails to compile after a new field is added between BalanceC and the bool. Explain why positional literals are fragile and fix it.',
+      hints: [
+        "A positional literal must list every field in declaration order.",
+        'Use a keyed literal like `Account{ID: "a1", BalanceC: 1000, Active: true}`.',
+      ],
     },
     {
       id: "go2st-refactor-consistency",
       type: "refactoring",
       prompt:
         "An Account type has some methods on value receivers and some on pointer receivers, seemingly at random. Refactor for a consistent receiver choice and explain the rule you applied.",
-      hints: ["If any method needs a pointer receiver, it's usual to give them all pointer receivers.", "Mixed receivers on one type confuse readers and the method set."],
+      hints: [
+        "If any method needs a pointer receiver, it's usual to give them all pointer receivers.",
+        "Mixed receivers on one type confuse readers and the method set.",
+      ],
     },
     {
       id: "go2st-design-receiver",
       type: "design",
       prompt:
-        "Decide whether LedgerFlow's `Statement()` method (which only formats and returns a string) should use a value or pointer receiver, and state what evidence would flip your choice.",
-      hints: ["Does the method change the account, or only read it?", "Is the type already using pointer receivers elsewhere for consistency?"],
+        "Decide whether a Task's `Label()` method (which only formats and returns a string) should use a value or pointer receiver, and state what evidence would flip your choice.",
+      hints: [
+        "Does the method change the account, or only read it?",
+        "Is the type already using pointer receivers elsewhere for consistency?",
+      ],
     },
     {
       id: "go2st-advanced-new",
       type: "advanced",
       prompt:
         "Show two ways to allocate a fresh Account and get a *Account back: `new(Account)` and `&Account{...}`. Explain what each produces and when you'd prefer the composite-literal form.",
-      hints: ["`new(T)` returns a *T pointing at a zero-valued T.", "`&Account{ID: \"a1\"}` also returns a *Account but lets you set fields at the same time."],
+      hints: [
+        "`new(T)` returns a *T pointing at a zero-valued T.",
+        '`&Account{ID: "a1"}` also returns a *Account but lets you set fields at the same time.',
+      ],
     },
   ],
   masteryCriteria: [
     {
       id: "explain-pointer",
       kind: "explain",
-      description: "Explain in plain words what &x, *p, and *T mean and why p.Field needs no explicit dereference.",
+      description:
+        "Explain in plain words what &x, *p, and *T mean and why p.Field needs no explicit dereference.",
       required: true,
     },
     {
       id: "predict-receiver",
       kind: "predict",
-      description: "Correctly predict whether a method's mutation reaches the caller from its receiver type.",
+      description:
+        "Correctly predict whether a method's mutation reaches the caller from its receiver type.",
       required: true,
     },
     {
       id: "implement-receiver",
       kind: "implement",
-      description: "Write a method with the receiver type that makes a mutation persist, and it compiles cleanly.",
+      description:
+        "Write a method with the receiver type that makes a mutation persist, and it compiles cleanly.",
       required: true,
     },
     {
       id: "design-receiver",
       kind: "design",
-      description: "Defend a value-vs-pointer receiver choice for a LedgerFlow method.",
+      description: "Defend a value-vs-pointer receiver choice for a method.",
       required: false,
     },
   ],
   sections: {
     problem: {
-      body: "Real programs rarely deal with a lone number or string. They deal with *things* that have several parts at once: an account has an ID, a balance, and a status; a transaction has an amount, a date, and a note. You could keep those parts in separate variables, but then nothing ties them together and it's easy to update one and forget the rest.\n\nGo's answer is the **struct** — a single type that groups related fields into one value. Once you have a struct you'll want to attach behavior to it (a method) and, often, to *change* it. That last part reopens a familiar trap from the copy-semantics lesson: by default Go hands out copies, so a method that edits its struct can silently change nothing. The tool that fixes it is the **pointer**.",
+      body: "Real programs rarely deal with a lone number or string. They deal with *things* that have several parts at once: a book has a title, an author, and a page count. You could keep those parts in separate variables, but then nothing ties them together and it's easy to update one and forget the rest.\n\nGo's answer is the **struct** — a single type that groups related fields into one value. Once you have a struct, you can attach behavior to it with a **method**. If a method needs to change the original struct instead of a copy, it uses a **pointer**. The next lesson explains that copy-versus-share rule in detail.",
       blocks: [
         {
           type: "note",
@@ -157,76 +173,6 @@ export const goStructsPointers: Lesson = {
             "A **struct** bundles related fields into one named type.",
             "A **method** attaches behavior to that type.",
             "A **pointer** lets a method reach back and change the caller's actual struct instead of a copy.",
-          ],
-        },
-      ],
-    },
-    naive: {
-      body: "The first instinct is to keep the parts as loose variables — `id`, `balanceC`, `active` — and pass them around individually. It works for two fields and falls apart at five: every function grows a longer parameter list, and it's on you to keep the pieces in sync.\n\nThe second naive move comes once you *do* make a struct and give it a method: writing the method with a plain value receiver and expecting a change to stick. It won't. A value receiver is a copy — exactly like a value parameter — so the method edits its own copy and the original is untouched.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "A value receiver edits a copy",
-            language: "go",
-            code:
-              'type Account struct {\n    ID       string\n    BalanceC int64 // cents\n}\n\nfunc (a Account) Deposit(c int64) { // value receiver = a copy\n    a.BalanceC += c\n}\n\nfunc main() {\n    acct := Account{ID: "a1", BalanceC: 1000}\n    acct.Deposit(500)\n    fmt.Println(acct.BalanceC) // prints: 1000, not 1500\n}',
-            takeaway: "`Deposit` received a copy of acct. Its `+= 500` died with the copy when the method returned.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Loose variables don't stay in sync — group them into a struct.",
-            "A value receiver is a copy, so a mutation through it is a silent no-op.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The value-receiver mistake is quiet, which is what makes it dangerous. There's no compile error and no panic — the code reads like it works, and if you print the balance *inside* the method it even looks right. The gap only appears when the caller reads the balance back and sees the old number.\n\nThis is the copy-semantics bug wearing a new hat. Last module it was a value *parameter*; here it's a value *receiver*. Same cause (Go copied the struct), same symptom (the write vanished), same fix (share the real struct with a pointer).",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The deposit that never lands",
-            context:
-              "A Deposit method on a value receiver adds 500 cents and returns. Inside the method a log line shows the new balance of 1500. The caller reads the account afterward and sees 1000. No error, no panic — just a deposit that appears to have happened and didn't.",
-            insight: "Both facts are true at once: the copy's balance became 1500, the original stayed 1000. They were never the same value. A pointer receiver would have made them one.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "A value-receiver mutation looks correct inside the method and is lost outside it.",
-            "It's the copy-semantics trap again — this time at the method receiver.",
-          ],
-        },
-      ],
-    },
-    intuition: {
-      body: "Replace the guesswork with two clear pictures. First, a struct is one box with several labelled compartments; building it means filling those compartments with a **composite literal** — the `Account{...}` syntax that lists field values.\n\nSecond, a **pointer** is a value that holds the *address* of a box rather than a copy of it. `&acct` reads as 'the address of acct'. A method whose receiver is a pointer gets that address, so it opens the *same* box the caller has — and any change it makes is a change the caller sees.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "A struct is one box; a pointer is its address",
-            kind: "flow",
-            nodes: [
-              { id: "struct", label: "acct", detail: "one box: ID, BalanceC, Active" },
-              { id: "addr", label: "&acct", detail: "the address of that box", tone: "accent" },
-              { id: "ptr", label: "p *Account", detail: "holds the address" },
-              { id: "write", label: "p.BalanceC = 1500", detail: "changes acct's box", tone: "success" },
-            ],
-            caption: "A pointer receiver holds the account's address, so its writes reach the caller's box.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Build a struct with a composite literal: `Account{ID: \"a1\", BalanceC: 1000}`.",
-            "`&x` is the address of x; a pointer holds an address, not a copy.",
-            "A pointer receiver shares the caller's box, so mutations persist.",
           ],
         },
       ],
@@ -251,12 +197,14 @@ export const goStructsPointers: Lesson = {
               {
                 id: "value",
                 label: "Value receiver: (a Account)",
-                detail: "Gets a copy. Great for read-only methods on small structs. Mutations don't persist.",
+                detail:
+                  "Gets a copy. Great for read-only methods on small structs. Mutations don't persist.",
               },
               {
                 id: "pointer",
                 label: "Pointer receiver: (a *Account)",
-                detail: "Gets the address. Can mutate the caller's struct and avoids copying large ones.",
+                detail:
+                  "Gets the address. Can mutate the caller's struct and avoids copying large ones.",
                 tone: "accent",
               },
             ],
@@ -272,9 +220,9 @@ export const goStructsPointers: Lesson = {
           example: {
             title: "&, *, and auto-dereference",
             language: "go",
-            code:
-              'acct := Account{ID: "a1", BalanceC: 1000}\n\np := &acct          // p is a *Account: the ADDRESS of acct\nfmt.Println(*p)     // dereference: prints the whole Account value\n\np.BalanceC = 1500   // shorthand for (*p).BalanceC = 1500\nfmt.Println(acct.BalanceC) // 1500 — we changed acct through p',
-            takeaway: "`&acct` is the address, `*p` follows it back, and `p.BalanceC` auto-dereferences so you never type `(*p)`.",
+            code: 'acct := Account{ID: "a1", BalanceC: 1000}\n\np := &acct          // p is a *Account: the ADDRESS of acct\nfmt.Println(*p)     // dereference: prints the whole Account value\n\np.BalanceC = 1500   // shorthand for (*p).BalanceC = 1500\nfmt.Println(acct.BalanceC) // 1500 — we changed acct through p',
+            takeaway:
+              "`&acct` is the address, `*p` follows it back, and `p.BalanceC` auto-dereferences so you never type `(*p)`.",
           },
         },
         {
@@ -282,9 +230,9 @@ export const goStructsPointers: Lesson = {
           example: {
             title: "Keyed literals survive change; positional ones break",
             language: "go",
-            code:
-              'type Account struct {\n    ID       string\n    BalanceC int64\n    Active   bool\n}\n\n// Keyed: order-independent, safe if fields are added.\na := Account{ID: "a1", BalanceC: 1000, Active: true}\n\n// Positional: must match declaration order exactly.\nb := Account{"a1", 1000, true} // fragile — reordering fields silently breaks this',
-            takeaway: "Prefer keyed literals. They read clearly and don't break when the struct grows.",
+            code: 'type Account struct {\n    ID       string\n    BalanceC int64\n    Active   bool\n}\n\n// Keyed: order-independent, safe if fields are added.\na := Account{ID: "a1", BalanceC: 1000, Active: true}\n\n// Positional: must match declaration order exactly.\nb := Account{"a1", 1000, true} // fragile — reordering fields silently breaks this',
+            takeaway:
+              "Prefer keyed literals. They read clearly and don't break when the struct grows.",
           },
         },
         {
@@ -309,17 +257,20 @@ export const goStructsPointers: Lesson = {
               {
                 id: "byvalue",
                 label: "acct.Deposit(500) with (a Account)",
-                detail: "Go copies acct into a. Writes to a.BalanceC never reach acct. Deposit is a no-op.",
+                detail:
+                  "Go copies acct into a. Writes to a.BalanceC never reach acct. Deposit is a no-op.",
                 tone: "muted",
               },
               {
                 id: "bypointer",
                 label: "acct.Deposit(500) with (a *Account)",
-                detail: "Go passes &acct. a holds acct's address, so a.BalanceC += 500 changes acct.",
+                detail:
+                  "Go passes &acct. a holds acct's address, so a.BalanceC += 500 changes acct.",
                 tone: "accent",
               },
             ],
-            caption: "One character of difference in the receiver — Account vs *Account — decides whether the deposit is real.",
+            caption:
+              "One character of difference in the receiver — Account vs *Account — decides whether the deposit is real.",
           },
         },
       ],
@@ -332,9 +283,9 @@ export const goStructsPointers: Lesson = {
           example: {
             title: "An account with read and mutate methods",
             language: "go",
-            code:
-              'type Account struct {\n    ID       string\n    BalanceC int64 // balance in cents\n}\n\n// Reads only — a value receiver is fine and can\'t corrupt the account.\nfunc (a Account) IsOverdrawn() bool {\n    return a.BalanceC < 0\n}\n\n// Mutates — must use a pointer receiver so the change persists.\nfunc (a *Account) Deposit(c int64) {\n    a.BalanceC += c\n}\n\nfunc main() {\n    acct := Account{ID: "a1", BalanceC: 1000}\n    acct.Deposit(500)            // Go passes &acct automatically\n    fmt.Println(acct.BalanceC)   // 1500 — persisted\n    fmt.Println(acct.IsOverdrawn()) // false\n}',
-            takeaway: "Match the receiver to intent: value to read, pointer to mutate. The call site looks the same either way.",
+            code: 'type Account struct {\n    ID       string\n    BalanceC int64 // balance in cents\n}\n\n// Reads only — a value receiver is fine and can\'t corrupt the account.\nfunc (a Account) IsOverdrawn() bool {\n    return a.BalanceC < 0\n}\n\n// Mutates — must use a pointer receiver so the change persists.\nfunc (a *Account) Deposit(c int64) {\n    a.BalanceC += c\n}\n\nfunc main() {\n    acct := Account{ID: "a1", BalanceC: 1000}\n    acct.Deposit(500)            // Go passes &acct automatically\n    fmt.Println(acct.BalanceC)   // 1500 — persisted\n    fmt.Println(acct.IsOverdrawn()) // false\n}',
+            takeaway:
+              "Match the receiver to intent: value to read, pointer to mutate. The call site looks the same either way.",
           },
         },
         {
@@ -368,9 +319,9 @@ export const goStructsPointers: Lesson = {
           example: {
             title: "The classic value-receiver no-op",
             language: "go",
-            code:
-              'func (a Account) SetActive() { a.Active = true } // value receiver\n\nacct := Account{ID: "a1"}\nacct.SetActive()\nfmt.Println(acct.Active) // false — the write went to a copy',
-            takeaway: "If a method's job is to change the receiver, a value receiver makes it do nothing. Reach for `*Account`.",
+            code: 'func (a Account) SetActive() { a.Active = true } // value receiver\n\nfunc main() {\n    acct := Account{ID: "a1"}\n    acct.SetActive()\n    fmt.Println(acct.Active) // false — the write went to a copy\n}',
+            takeaway:
+              "If a method's job is to change the receiver, a value receiver makes it do nothing. Reach for `*Account`.",
           },
         },
       ],
@@ -404,46 +355,13 @@ export const goStructsPointers: Lesson = {
           type: "scenario",
           scenario: {
             title: "Designing the Account method set",
-            context: "Account already has a Deposit method that must mutate the balance, so it uses a pointer receiver. A new Statement method only formats a string.",
-            insight: "Even though Statement only reads, giving it a pointer receiver too keeps Account's method set consistent — the idiomatic choice once any method needs a pointer.",
+            context:
+              "Account already has a Deposit method that must mutate the balance, so it uses a pointer receiver. A new Statement method only formats a string.",
+            insight:
+              "Even though Statement only reads, giving it a pointer receiver too keeps Account's method set consistent — the idiomatic choice once any method needs a pointer.",
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "This is exactly how LedgerFlow models its domain. An `Account` is a struct grouping its ID, its balance in cents, and its status into one value you can pass around as a unit. Methods that *change* the account — `Deposit`, `Withdraw`, `Freeze` — take a pointer receiver, so calling them updates the real stored record instead of a discarded copy. Methods that only *read* — like a balance formatter — could take a value receiver, but because the type already uses pointer receivers to mutate, LedgerFlow keeps them all on pointer receivers for consistency.\n\nGetting this wrong is the ledger's classic silent bug: a `Deposit` on a value receiver that appears to work in tests but never actually moves the money. Choosing the receiver deliberately is what makes the balance trustworthy.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Account as a struct with a mutating method",
-            language: "go",
-            code:
-              'type Account struct {\n    ID       string\n    BalanceC int64 // cents, exact\n    Active   bool\n}\n\n// Mutates the stored balance → pointer receiver.\nfunc (a *Account) Deposit(c int64) {\n    a.BalanceC += c\n}\n\nfunc main() {\n    acct := Account{ID: "a1", BalanceC: 1000, Active: true}\n    acct.Deposit(500)\n    fmt.Println(acct.BalanceC) // 1500 — the deposit is real\n}',
-            takeaway: "Grouping fields into Account plus a pointer-receiver Deposit is how a balance change actually persists.",
-          },
-        },
-        {
-          type: "diagram",
-          diagram: {
-            title: "Read vs mutate on Account",
-            kind: "compare",
-            nodes: [
-              { id: "read", label: "Statement() / IsOverdrawn()", detail: "reads only → value receiver would be safe" },
-              {
-                id: "mutate",
-                label: "Deposit() / Withdraw()",
-                detail: "changes the balance → must be a pointer receiver",
-                tone: "accent",
-              },
-            ],
-            caption: "Mutating methods must take *Account, or the balance change silently disappears.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize this' into 'I can predict and build it'. Work across prediction, code-reading, implementation, debugging, refactoring, design, and one advanced allocation puzzle. Each produces a different kind of evidence, so finishing one doesn't cover the others.",
     },
     mastery: {
       body: "You've mastered this lesson when four signals hold without notes: you can explain what `&x`, `*p`, and `*T` mean and why `p.Field` needs no explicit dereference; correctly predict whether a method's mutation reaches the caller from its receiver type; write a method with the receiver that makes a change persist; and defend a value-vs-pointer receiver choice for a real method. Check a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
@@ -458,7 +376,7 @@ export const goStructsPointers: Lesson = {
             "`&x` takes an address, `*p` dereferences, `*T` is the pointer type; `p.Field` auto-dereferences.",
             "Value receiver = copy (read-only); pointer receiver = shared (can mutate, avoids copying large structs).",
             "Be consistent per type; `new(T)` and `&T{}` both give you a *T.",
-            "Next up: interfaces — describing behavior a type must provide.",
+            "Next: see exactly when assignment and function calls copy a struct and when a pointer shares it.",
           ],
         },
       ],
