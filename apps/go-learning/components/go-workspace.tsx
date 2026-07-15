@@ -37,24 +37,325 @@ import {
 } from "@platform/curriculum";
 
 const stageMeta = [
-  ["problem", "01", "The problem"],
-  ["naive", "02", "Naive model"],
-  ["failure", "03", "Failure"],
-  ["intuition", "04", "Intuition"],
-  ["mental-model", "05", "Mental model"],
-  ["mechanics", "06", "Mechanics"],
-  ["diagram", "07", "Runtime trace"],
-  ["implementation", "08", "Implementation"],
-  ["experiment", "09", "Experiment"],
-  ["failure-cases", "10", "Failure cases"],
-  ["trade-offs", "11", "Trade-offs"],
-  ["design", "12", "Design"],
-  ["ledgerflow", "13", "LedgerFlow"],
-  ["exercises", "14", "Exercises"],
-  ["mastery", "15", "Verify mastery"],
-  ["summary", "16", "Summary"],
+  ["problem", "01", "Why this matters"],
+  ["mental-model", "02", "Key mental model"],
+  ["diagram", "03", "Visual model"],
+  ["mechanics", "04", "Rules and behavior"],
+  ["implementation", "05", "Worked example"],
+  ["experiment", "06", "Prediction experiment"],
+  ["failure-cases", "07", "Common mistakes"],
+  ["summary", "08", "What to remember"],
+  ["exercises", "09", "Exercises"],
+  ["mastery", "10", "Mastery checklist"],
+  ["trade-offs", "11", "Trade-offs and alternatives"],
+  ["design", "12", "Recommended practices"],
 ] as const;
 type StageId = (typeof stageMeta)[number][0];
+type ChapterId = "big-picture" | "code-experiment" | "best-practices" | "practice" | "deeper";
+
+/**
+ * The authored schema stays detailed, but beginners should not have to navigate
+ * every authored stage as an equally prominent "session." The workspace keeps
+ * the clearest explanation, code, visual, best practices, and practice in a
+ * short path while deeper trade-offs remain optional.
+ */
+const chapterMeta: readonly {
+  id: ChapterId;
+  number: string;
+  label: string;
+  description: string;
+  stages: readonly StageId[];
+  optional?: boolean;
+}[] = [
+  {
+    id: "big-picture",
+    number: "01",
+    label: "Concept & mental model",
+    description: "Build the mental model that makes the rest of the topic predictable.",
+    stages: ["problem", "mental-model", "diagram"],
+  },
+  {
+    id: "code-experiment",
+    number: "02",
+    label: "Rules & examples",
+    description: "Learn the exact rules, see them in code, and test a prediction.",
+    stages: ["mechanics", "implementation", "experiment"],
+  },
+  {
+    id: "best-practices",
+    number: "03",
+    label: "Best practices & pitfalls",
+    description: "Use the recommended approach and avoid the mistakes beginners commonly meet.",
+    stages: ["design", "failure-cases"],
+  },
+  {
+    id: "practice",
+    number: "04",
+    label: "Exercises & review",
+    description: "Recap the idea, solve a few core problems, and check your understanding.",
+    stages: ["summary", "exercises", "mastery"],
+  },
+  {
+    id: "deeper",
+    number: "05",
+    label: "Trade-offs",
+    description: "Optional trade-offs for when the core idea feels comfortable.",
+    stages: ["trade-offs"],
+    optional: true,
+  },
+];
+
+/** Concise chapter names that say what each lesson actually teaches. */
+const lessonChapterLabels: Record<string, Partial<Record<ChapterId, string>>> = {
+  "go-source-to-process": {
+    "big-picture": "Packages, build & startup",
+    "code-experiment": "From package to main",
+  },
+  "go-basic-types": {
+    "big-picture": "Types, constants & zero values",
+    "code-experiment": "Declarations & conversions",
+  },
+  "go-functions-defer": {
+    "big-picture": "Functions as values",
+    "code-experiment": "Returns, defer & closures",
+  },
+  "go-control-flow": {
+    "big-picture": "Choosing execution paths",
+    "code-experiment": "if, for & switch rules",
+  },
+  "go-structs-pointers": {
+    "big-picture": "Structs and shared updates",
+    "code-experiment": "Pointers, methods & receivers",
+  },
+  "go-copy-semantics": {
+    "big-picture": "Copies versus shared data",
+    "code-experiment": "Assignment, scope & shadowing",
+  },
+  "go-slices": {
+    "big-picture": "Slices and backing arrays",
+    "code-experiment": "Length, capacity & append",
+  },
+  "go-maps": {
+    "big-picture": "Key-value lookup",
+    "code-experiment": "Reads, writes & iteration",
+  },
+  "go-strings-runes": {
+    "big-picture": "Text is stored as bytes",
+    "code-experiment": "Bytes, runes & UTF-8",
+  },
+  "go-unit-table-tests": {
+    "big-picture": "Testing behavior",
+    "code-experiment": "Table tests & subtests",
+  },
+  "go-stack-heap-escape": {
+    "big-picture": "Where values live",
+    "code-experiment": "Escape analysis in practice",
+  },
+  "go-interfaces": {
+    "big-picture": "Behavior without implements",
+    "code-experiment": "Method sets & nil interfaces",
+  },
+  "go-assertions-switches": {
+    "big-picture": "Dynamic interface values",
+    "code-experiment": "Assertions & type switches",
+  },
+  "go-embedding": {
+    "big-picture": "Composition through embedding",
+    "code-experiment": "Promotion & conflicts",
+  },
+  "go-generics": {
+    "big-picture": "Reusable typed algorithms",
+    "code-experiment": "Parameters, constraints & inference",
+  },
+  "go-error-values": {
+    "big-picture": "Failures as values",
+    "code-experiment": "Creating & returning errors",
+  },
+  "go-error-wrapping": {
+    "big-picture": "Error chains",
+    "code-experiment": "Wrap, inspect & preserve",
+  },
+  "go-panic-recover": {
+    "big-picture": "Exceptional failure",
+    "code-experiment": "Panic, defer & recover",
+  },
+  "go-dependency-direction": {
+    "big-picture": "Interfaces at the consumer",
+    "code-experiment": "Package dependency direction",
+  },
+  "go-io-reader-writer": {
+    "big-picture": "One interface, many streams",
+    "code-experiment": "Read, write, copy & EOF",
+  },
+  "go-files-os": {
+    "big-picture": "Working with the operating system",
+    "code-experiment": "Files, environment & paths",
+  },
+  "go-json": {
+    "big-picture": "Go values and JSON",
+    "code-experiment": "Tags, encoding & decoding",
+  },
+  "go-time-context": {
+    "big-picture": "Moments and durations",
+    "code-experiment": "Elapsed time, RFC3339 & UTC",
+  },
+  "go-net-http": {
+    "big-picture": "Requests, handlers & responses",
+    "code-experiment": "Routing, middleware & clients",
+  },
+  "go-database-sql": {
+    "big-picture": "SQL through a connection pool",
+    "code-experiment": "Queries, rows & transactions",
+  },
+  "go-goroutines-scheduler": {
+    "big-picture": "Concurrent functions",
+    "code-experiment": "Scheduling, blocking & waiting",
+  },
+  "go-channels-select": {
+    "big-picture": "Passing values between goroutines",
+    "code-experiment": "Send, receive, close & select",
+  },
+  "go-sync-atomic": {
+    "big-picture": "Protecting shared state",
+    "code-experiment": "Mutexes, WaitGroups & atomics",
+  },
+  "go-context-cancellation": {
+    "big-picture": "Cancellation as a signal",
+    "code-experiment": "Deadlines, propagation & cleanup",
+  },
+  "go-concurrency-patterns": {
+    "big-picture": "Structuring concurrent work",
+    "code-experiment": "Pipelines, workers & fan-in/out",
+  },
+  "go-benchmarks": {
+    "big-picture": "Measuring performance",
+    "code-experiment": "Benchmark loops & allocations",
+  },
+  "go-fuzzing": {
+    "big-picture": "Testing generated inputs",
+    "code-experiment": "Seeds, properties & failures",
+  },
+  "go-mocks-fakes": {
+    "big-picture": "Replacing dependencies in tests",
+    "code-experiment": "Fakes, stubs, mocks & spies",
+  },
+  "go-vet-coverage": {
+    "big-picture": "Finding untested mistakes",
+    "code-experiment": "Vet, coverage & linting",
+  },
+  "go-profiling-pprof": {
+    "big-picture": "Finding real bottlenecks",
+    "code-experiment": "pprof & race detection",
+  },
+  "go-toolchain-modules": {
+    "big-picture": "How Go manages a project",
+    "code-experiment": "Commands, modules & workspaces",
+  },
+  "go-gc-tuning": {
+    "big-picture": "How Go reclaims memory",
+    "code-experiment": "Pacing, GOGC & memory limits",
+  },
+  "go-reflection": {
+    "big-picture": "Types and values at runtime",
+    "code-experiment": "Inspecting & changing values",
+  },
+  "go-unsafe-cgo": {
+    "big-picture": "Crossing Go's safety boundary",
+    "code-experiment": "Pointers, C calls & linking",
+  },
+  "go-modules-advanced": {
+    "big-picture": "Releasing reusable modules",
+    "code-experiment": "Versions, MVS & publishing",
+  },
+};
+
+/** One familiar anchor per lesson for learners arriving from React/TypeScript. */
+const frontendBridge: Record<string, string> = {
+  "go-source-to-process":
+    "A Next.js build also transforms source before it runs. Go goes further: it compiles and links your packages into a native executable, then the operating system starts that file.",
+  "go-toolchain-modules":
+    "Think package.json + npm scripts, but Go keeps module requirements in go.mod and most build, test, format, and dependency commands under one go tool.",
+  "go-basic-types":
+    "Like TypeScript, Go can infer a variable's type from its initializer. Go's types also affect compilation and memory layout, and a declared value starts at its zero value instead of undefined.",
+  "go-copy-semantics":
+    "JavaScript objects are normally shared by reference. Go structs are copied as values by default, while slices, maps, and pointers can still share underlying data.",
+  "go-functions-defer":
+    "Go functions feel familiar, but they can return several values. defer is closest to scheduling cleanup for the end of the current function, somewhat like a small finally block.",
+  "go-control-flow":
+    "if and switch look familiar, but Go has no truthy/falsy coercion and uses for for every loop shape—there is no separate while keyword.",
+  "go-slices":
+    "A slice often plays the role of a JavaScript array, but it is a small view over a backing array. Two slices can therefore share and mutate the same elements.",
+  "go-maps":
+    "A Go map is closest to JavaScript Map or Record, but keys and values have fixed types. Reading a missing key returns the value type's zero value plus an optional presence boolean.",
+  "go-strings-runes":
+    "JavaScript string indexing exposes UTF-16 code units. Go string indexing exposes UTF-8 bytes; range decodes Unicode code points called runes.",
+  "go-structs-pointers":
+    "A struct may look like a typed object, but it has a concrete Go layout and is copied by value. A pointer makes shared mutation explicit.",
+  "go-stack-heap-escape":
+    "Like JavaScript engines, Go manages memory for you. The Go compiler decides stack versus heap placement; write clear code first and inspect escape output only when measuring performance.",
+  "go-interfaces":
+    "Go interfaces resemble TypeScript structural typing because a type satisfies an interface without an implements declaration. Method sets and interface nil values add runtime rules TypeScript does not have.",
+  "go-assertions-switches":
+    "A TypeScript as assertion is erased and does no runtime check. A Go type assertion examines the dynamic value and can return an ok boolean instead of panicking.",
+  "go-embedding":
+    "Embedding is composition with promoted fields or methods—not class inheritance and not object spread. The outer type still contains a distinct inner value.",
+  "go-generics":
+    "Type parameters and constraints will feel similar to TypeScript generics, but Go constraints describe valid operations and compile into real Go behavior rather than erased annotations.",
+  "go-error-values":
+    "Instead of throwing for expected failures, Go normally returns an error as another value. It is similar to checking a Result value explicitly at each boundary.",
+  "go-error-wrapping":
+    "This is like adding context to an Error while preserving its cause. errors.Is and errors.As inspect the wrapped chain without matching message strings.",
+  "go-panic-recover":
+    "panic is the nearest Go mechanism to a thrown exception, but ordinary failures should still be returned as errors. recover is a narrow boundary tool, not everyday try/catch.",
+  "go-dependency-direction":
+    "This follows the same dependency-inversion idea used in frontend service layers: the consumer names the small behavior it needs, and concrete infrastructure implements it.",
+  "go-io-reader-writer":
+    "Reader and Writer are small synchronous stream interfaces. They play a role similar to web streams or Node streams, but composition is based on simple Read and Write methods.",
+  "go-files-os":
+    "This is server-side territory like Node's fs, process.env, and process exit codes. Browsers cannot directly open arbitrary operating-system files this way.",
+  "go-json":
+    "JSON.parse returns dynamic JavaScript data. Go usually decodes into a struct, where field types and tags define the expected runtime shape.",
+  "go-time-context":
+    "time.Time is closest to JavaScript Date, while time.Duration represents a length of time. Go makes units explicit and uses reference layouts for formatting; prefer RFC3339 and UTC when timestamps cross a system boundary.",
+  "go-net-http":
+    "A net/http handler is the lower-level cousin of a Next.js route handler: read a request and produce a response, but write through http.ResponseWriter.",
+  "go-database-sql":
+    "This code belongs on the server, never in a React client. sql.DB is a reusable connection pool, closer to a shared backend database client than one open connection.",
+  "go-goroutines-scheduler":
+    "A goroutine is not a Promise. It starts a function that may run concurrently, and the Go scheduler can pause it when a blocking operation waits.",
+  "go-channels-select":
+    "A channel is roughly a typed async queue between goroutines, but sends and receives can block. select waits for one of several channel operations.",
+  "go-sync-atomic":
+    "Frontend JavaScript usually avoids shared-memory threads. Once goroutines share mutable data, mutexes or atomics provide the ordering that the single browser event loop normally hides from you.",
+  "go-context-cancellation":
+    "AbortController and AbortSignal are the closest browser analogy. Go context also carries deadlines through a call tree so downstream work can stop with the caller.",
+  "go-races-detector":
+    "Think of bugs with Web Workers and SharedArrayBuffer: two workers touch shared memory without ordering. Go's -race flag detects many of these accesses during real execution.",
+  "go-concurrency-patterns":
+    "Promise.all and concurrency-limit helpers are useful anchors, but Go composes running functions with goroutines, channels, cancellation, and bounded worker counts.",
+  "go-unit-table-tests":
+    "The testing package fills the role of Jest or Vitest without a separate assertion DSL. Table tests are arrays of input/expected cases run by one Test function.",
+  "go-benchmarks":
+    "Instead of wrapping performance.now around a loop, Go's testing harness controls `b.Loop`, timing, repetitions, and allocation reporting for you.",
+  "go-fuzzing":
+    "Fuzzing is property-based testing built into go test: provide seed examples and an invariant, then let the tool generate inputs you did not think of.",
+  "go-mocks-fakes":
+    "The goal is familiar from Jest/Vitest tests, but Go often needs only a tiny hand-written fake that satisfies an interface—no large mocking framework.",
+  "go-vet-coverage":
+    "go vet and static analysis play roles similar to TypeScript and ESLint, while coverage still measures executed code rather than whether assertions were meaningful.",
+  "go-profiling-pprof":
+    "pprof is the Go-side cousin of the Chrome Performance panel: capture evidence about where CPU time or memory goes before changing code.",
+  "go-escape-analysis-deep":
+    "JavaScript hides most allocation placement. Go lets you ask why a value escaped to the heap, but the result is a compiler decision—not a rule you should guess from syntax.",
+  "go-gc-tuning":
+    "Both V8 and Go use garbage collection. Go exposes service-level memory controls, but reducing unnecessary allocation is usually safer than tuning the collector first.",
+  "go-reflection":
+    "Most TypeScript type information is erased. Go reflection can inspect runtime Go types and values, but it trades away compile-time clarity and should stay at framework boundaries.",
+  "go-unsafe-cgo":
+    "unsafe is like bypassing TypeScript and directly manipulating memory; cgo is closer to a native Node addon boundary. Both give up portability or safety and are advanced opt-ins.",
+  "go-modules-advanced":
+    "Go modules solve a problem similar to npm packages, but v2+ enters the import path and Minimal Version Selection follows go.mod requirements instead of always choosing latest.",
+};
 
 /**
  * Stages that always render for every lesson because they carry a data-driven
@@ -73,39 +374,56 @@ const bespokeWidgetStages: StageId[] = ["diagram", "experiment", "implementation
 
 const pipeline: DiagramNode[] = [
   {
-    id: "resolve",
-    label: "resolve",
-    detail: "Build the package dependency graph and select module versions.",
-    x: 20,
-    y: 90,
+    id: "package",
+    label: "go command",
+    detail: "Load the named main package and its dependencies, then coordinate the build.",
+    owner: "`go` command (`cmd/go`)",
+    source: { label: "Official cmd/go documentation", url: "https://pkg.go.dev/cmd/go" },
+    phase: "build",
   },
   {
     id: "compile",
     label: "compile",
-    detail: "Type-check packages and emit object data.",
-    x: 175,
-    y: 90,
+    detail:
+      "Compile each needed package as one unit. The build cache may reuse an unchanged result.",
+    owner: "`go tool compile` (`cmd/compile`); `asm` or `cgo` joins only when the package needs it",
+    source: {
+      label: "Official cmd/compile documentation",
+      url: "https://pkg.go.dev/cmd/compile",
+    },
+    phase: "build",
   },
   {
     id: "link",
     label: "link",
-    detail: "Resolve reachable symbols into an executable image.",
-    x: 330,
-    y: 90,
+    detail: "Combine package objects and dependencies into one executable binary.",
+    owner: "`go tool link` (`cmd/link`), normally invoked by the `go` command",
+    source: { label: "Official cmd/link documentation", url: "https://pkg.go.dev/cmd/link" },
+    phase: "build",
   },
   {
-    id: "load",
-    label: "OS load",
-    detail: "Map executable segments and transfer control to its entry point.",
-    x: 485,
-    y: 90,
+    id: "initialize",
+    label: "initialize",
+    detail:
+      "Initialize the complete program: dependencies before importers, then package main's variables and init functions.",
+    owner: "initialization code already inside the executable; no external `go tool` runs here",
+    source: {
+      label: "Go specification: program initialization",
+      url: "https://go.dev/ref/spec#Program_initialization_and_execution",
+    },
+    phase: "run",
   },
   {
-    id: "runtime",
-    label: "runtime",
-    detail: "Prepare scheduler, allocator, GC, package init, then main.",
-    x: 640,
-    y: 90,
+    id: "main",
+    label: "main()",
+    detail:
+      "Go invokes func main after initialization. When it returns, the program exits without waiting for other goroutines.",
+    owner: "your compiled `main.main` function inside the executable",
+    source: {
+      label: "Go specification: program execution",
+      url: "https://go.dev/ref/spec#Program_execution",
+    },
+    phase: "run",
   },
 ];
 
@@ -181,7 +499,10 @@ function referenceTokenCheck(expected: string) {
   return (code: string) => {
     const missing = tokens.filter((t) => !code.includes(t));
     return missing.length === 0
-      ? { passed: true, output: "deterministic check — every key element of the reference is present" }
+      ? {
+          passed: true,
+          output: "deterministic check — every key element of the reference is present",
+        }
       : {
           passed: false,
           output: `deterministic check — still missing: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}`,
@@ -628,10 +949,7 @@ function Workspace({
   } = useLearning();
 
   // Registry of every authored lesson, keyed by id, for opening any topic.
-  const lessonsById = useMemo(
-    () => new Map(lessons.map((l) => [l.id, l])),
-    [lessons],
-  );
+  const lessonsById = useMemo(() => new Map(lessons.map((l) => [l.id, l])), [lessons]);
 
   // The default selection: the first authored topic in curriculum order.
   const lessonTopicId = useMemo(() => {
@@ -692,6 +1010,20 @@ function Workspace({
     [lesson, widgetStages],
   );
 
+  const renderedChapters = useMemo(
+    () =>
+      chapterMeta
+        .map((chapter) => ({
+          ...chapter,
+          label: lessonChapterLabels[lesson?.id ?? ""]?.[chapter.id] ?? chapter.label,
+          stages: renderedStages.filter(([id]) =>
+            chapter.stages.some((chapterStage) => chapterStage === id),
+          ),
+        }))
+        .filter((chapter) => chapter.stages.length > 0),
+    [lesson?.id, renderedStages],
+  );
+
   const state = lesson ? (progress[lesson.id] ?? "not_started") : "not_started";
   const evidence = getEvidence(lesson?.id ?? "");
   const requiredCriteria = lesson
@@ -704,7 +1036,9 @@ function Workspace({
   const completed = lesson ? completedLessons.includes(lesson.id) : false;
   const completedExercises = new Set(lesson ? getExerciseCompletions(lesson.id) : []);
   const authoredLessonIds = allTopics(goCurriculum)
-    .filter((topic) => topic.status === "authored" && topic.lessonId && lessonsById.has(topic.lessonId))
+    .filter(
+      (topic) => topic.status === "authored" && topic.lessonId && lessonsById.has(topic.lessonId),
+    )
     .map((topic) => topic.lessonId!);
   const completedAuthoredLessons = authoredLessonIds.filter((id) =>
     completedLessons.includes(id),
@@ -713,6 +1047,12 @@ function Workspace({
     ? Math.round((completedAuthoredLessons / authoredLessonIds.length) * 100)
     : 0;
   const activeIndex = renderedStages.findIndex(([id]) => id === activeStage);
+  const activeChapterIndex = renderedChapters.findIndex((chapter) =>
+    chapter.stages.some(([id]) => id === activeStage),
+  );
+  const activeChapterId = renderedChapters[activeChapterIndex]?.id;
+  const coreChapterCount = renderedChapters.filter((chapter) => !chapter.optional).length;
+  const hasOptionalChapter = renderedChapters.some((chapter) => chapter.optional);
 
   const requiredMet = requiredCriteria.every((c) => evidence.criteria[c.id]);
   const mastered = state === "mastered";
@@ -872,6 +1212,20 @@ function Workspace({
     setPanel(null);
   };
 
+  const scrollToChapter = (chapterId: string) => {
+    const chapter = renderedChapters.find((item) => item.id === chapterId);
+    const firstStage = chapter?.stages[0]?.[0];
+    if (!firstStage) return;
+    if (chapter?.optional) {
+      const container = document.getElementById(`chapter-${chapterId}`);
+      const details = container?.querySelector<HTMLDetailsElement>("details.optional-depth");
+      if (details) details.open = true;
+      requestAnimationFrame(() => scrollToStage(firstStage));
+      return;
+    }
+    scrollToStage(firstStage);
+  };
+
   // From search: a stage belongs to the authored lesson, so switch into the lesson view
   // first if we're in a preview or the resources hub, queuing the target scroll.
   const goToStageFromSearch = (id: StageId) => {
@@ -948,25 +1302,33 @@ function Workspace({
       return (
         <div className="diagram-shell">
           <FlowDiagram nodes={pipeline} onSelect={setInspectorNode} />
-          <div className="diagram-legend">
-            <span>
-              <i className="source" />
-              build-time artifact
-            </span>
-            <span>
-              <i className="runtime" />
-              runtime state
-            </span>
-          </div>
           <div className="diagram-inspector">
             <div className="inspect-value">
               <span>{inspectorNode.id}</span>
               <strong>{inspectorNode.label}</strong>
             </div>
             <p>{inspectorNode.detail}</p>
+            <dl className="diagram-inspector-meta">
+              {inspectorNode.owner && (
+                <div>
+                  <dt>Who runs it</dt>
+                  <dd>{inspectorNode.owner}</dd>
+                </div>
+              )}
+              {inspectorNode.source && (
+                <div>
+                  <dt>Official source</dt>
+                  <dd>
+                    <a href={inspectorNode.source.url} target="_blank" rel="noreferrer">
+                      {inspectorNode.source.label}
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
             <p className="invariant">
-              Invariant: every imported package is initialized exactly once before the package that
-              imports it.
+              Official-source boundary: the toolchain builds the executable; the language
+              specification guarantees that the program initializes before Go invokes main.
             </p>
           </div>
         </div>
@@ -985,7 +1347,7 @@ function Workspace({
           </div>
           <p>Which runs first?</p>
           <div className="prediction-grid" role="group" aria-label="Prediction options">
-            {["main package variable", "dependency init", "main.init", "main.main"].map((value) => (
+            {["imported package", "main package setup", "func main()"].map((value) => (
               <button
                 className={prediction === value ? "selected" : ""}
                 aria-pressed={prediction === value}
@@ -1000,7 +1362,7 @@ function Workspace({
             disabled={!prediction}
             onClick={() => {
               setRevealed(true);
-              const correct = prediction === "dependency init";
+              const correct = prediction === "imported package";
               recordEvidence(lesson.id, { predictionCorrect: correct });
               applyEvent(lesson.id, { type: "ATTEMPT_EXERCISE", correct });
             }}
@@ -1009,11 +1371,13 @@ function Workspace({
           </Button>
           {revealed && (
             <div
-              className={prediction === "dependency init" ? "reveal correct" : "reveal"}
+              className={prediction === "imported package" ? "reveal correct" : "reveal"}
               role="status"
             >
-              <strong>{prediction === "dependency init" ? "Correct." : "Revise the model."}</strong>{" "}
-              Dependencies initialize before the importing package’s variables and init functions.
+              <strong>
+                {prediction === "imported package" ? "Correct." : "Revise the model."}
+              </strong>{" "}
+              Imported packages are prepared first, then the main package, and finally func main().
             </div>
           )}
         </div>
@@ -1044,9 +1408,18 @@ function Workspace({
     if (id === "exercises") {
       const regular = lesson.exercises.filter((e) => e.type !== "advanced");
       const challenges = lesson.exercises.filter((e) => e.type === "advanced");
+      const coreTypes = new Set(["prediction", "code-reading", "implementation"]);
+      const core = regular.filter((exercise) => coreTypes.has(exercise.type));
+      const extra = regular.filter((exercise) => !coreTypes.has(exercise.type));
+      const lastTopic = selectedModule?.topics[selectedModule.topics.length - 1];
+      const showModuleProject = lastTopic?.lessonId === lesson.id;
       return (
         <div className="exercise-stack">
-          {regular.map((exercise, i) => (
+          <p className="exercise-path-note">
+            Start with these three. The extra exercises are useful, but they are not required on
+            your first pass.
+          </p>
+          {core.map((exercise, i) => (
             <ExerciseCard
               key={exercise.id}
               index={i}
@@ -1059,29 +1432,55 @@ function Workspace({
             />
           ))}
 
-          {challenges.length > 0 && (
-            <div className="challenge-block">
-              <SectionLabel>Challenge checkpoint</SectionLabel>
-              <p className="challenge-intro">
-                Between sessions — push past the guided path on your own machine.
-              </p>
-              {challenges.map((exercise, i) => (
-                <ExerciseCard
-                  key={exercise.id}
-                  index={regular.length + i}
-                  exercise={exercise}
-                  done={completedExercises.has(exercise.id)}
-                  onComplete={() => completeExercise(exercise.id)}
-                  onOutcome={(correct) =>
-                    gradeExercise(exercise.id, correct, exercise.type === "prediction")
-                  }
-                  variant="challenge"
-                />
-              ))}
-            </div>
+          {extra.length > 0 && (
+            <details className="exercise-more">
+              <summary>
+                More practice <span>{extra.length} optional exercises</span>
+              </summary>
+              <div className="exercise-more-body">
+                {extra.map((exercise, i) => (
+                  <ExerciseCard
+                    key={exercise.id}
+                    index={core.length + i}
+                    exercise={exercise}
+                    done={completedExercises.has(exercise.id)}
+                    onComplete={() => completeExercise(exercise.id)}
+                    onOutcome={(correct) =>
+                      gradeExercise(exercise.id, correct, exercise.type === "prediction")
+                    }
+                  />
+                ))}
+              </div>
+            </details>
           )}
 
-          {selectedModule?.project && (
+          {challenges.length > 0 && (
+            <details className="exercise-more challenge-block">
+              <summary>
+                Challenge checkpoint <span>optional deep practice</span>
+              </summary>
+              <div className="exercise-more-body">
+                <p className="challenge-intro">
+                  Push past the guided path on your own machine when you feel ready.
+                </p>
+                {challenges.map((exercise, i) => (
+                  <ExerciseCard
+                    key={exercise.id}
+                    index={regular.length + i}
+                    exercise={exercise}
+                    done={completedExercises.has(exercise.id)}
+                    onComplete={() => completeExercise(exercise.id)}
+                    onOutcome={(correct) =>
+                      gradeExercise(exercise.id, correct, exercise.type === "prediction")
+                    }
+                    variant="challenge"
+                  />
+                ))}
+              </div>
+            </details>
+          )}
+
+          {showModuleProject && selectedModule?.project && (
             <ProjectPanel
               project={selectedModule.project}
               completed={getMilestones(selectedModule.id)}
@@ -1119,37 +1518,60 @@ function Workspace({
               </label>
             ))}
           </div>
-        </>
-      );
-    }
-
-    if (id === "summary") {
-      return (
-        <div className={mastered ? "readiness mastered" : "readiness"}>
-          <Check size={22} />
-          <div>
-            <strong>
-              {mastered
-                ? "Lesson mastered."
-                : requiredMet
-                  ? "Evidence complete—submit to master."
-                  : "Explanation reviewed—not yet mastered."}
-            </strong>
-            <p>
-              {mastered
-                ? "Recorded locally. It will sync when you create an account."
-                : "Complete the required mastery criteria before mastery unlocks."}
-            </p>
+          <div className={mastered ? "readiness mastered" : "readiness"}>
+            <Check size={22} />
+            <div>
+              <strong>
+                {mastered
+                  ? "Lesson mastered."
+                  : requiredMet
+                    ? "Evidence complete—submit to master."
+                    : "Complete the required checks to finish."}
+              </strong>
+              <p>
+                {mastered
+                  ? "Recorded locally. It will sync when you create an account."
+                  : "Optional criteria can be revisited later."}
+              </p>
+            </div>
+            <Button disabled={!requiredMet || mastered} onClick={submitMastery}>
+              {mastered ? "Mastered" : "Submit mastery evidence"}
+            </Button>
           </div>
-          <Button disabled={!requiredMet || mastered} onClick={submitMastery}>
-            {mastered ? "Mastered" : "Submit mastery evidence"}
-          </Button>
-        </div>
+        </>
       );
     }
 
     return null;
   };
+
+  const renderChapterStages = (chapter: (typeof renderedChapters)[number]) => (
+    <div className="chapter-stages">
+      {chapter.stages.map(([id, , fallbackLabel]) => {
+        const content = normalizeStage(lesson?.sections[id]);
+        const chapterSubject =
+          (lesson ? lessonChapterLabels[lesson.id]?.[chapter.id] : undefined) ??
+          lesson?.title ??
+          "this topic";
+        return (
+          <div
+            key={id}
+            id={`stage-${id}`}
+            data-stage={id}
+            ref={registerSection(id)}
+            className="lesson-subsection"
+            aria-labelledby={`stage-${id}-heading`}
+          >
+            <h3 id={`stage-${id}-heading`}>
+              {content.title ?? `${fallbackLabel}: ${chapterSubject}`}
+            </h3>
+            <StageArticle content={content} />
+            {renderWidget(id)}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   /** Inspectable catalog preview for a topic that has no authored lesson yet. */
   const renderPreview = (topic: TopicRef, module?: CurriculumModule) => {
@@ -1212,10 +1634,6 @@ function Workspace({
               </ul>
             </section>
           )}
-          <section className="preview-block" id="preview-ledgerflow">
-            <SectionLabel>Applied to LedgerFlow</SectionLabel>
-            <p>{topic.ledgerFlowApplication}</p>
-          </section>
           {resources.length > 0 && (
             <section className="preview-block" id="preview-resources">
               <ResourceList items={resources} title="Resources" />
@@ -1373,104 +1791,7 @@ function Workspace({
         </nav>
       </aside>
 
-      {/* CENTER — resources hub, the authored lesson (scroll-spied), or a topic preview */}
-      <main id="lesson-content" className="concept-workspace">
-        {resourcesOpen ? (
-          <ResourcesHub />
-        ) : lesson ? (
-          <>
-            <div className="reading-progress" aria-hidden>
-              <i
-                style={{
-                  width: `${((Math.max(activeIndex, 0) + 1) / renderedStages.length) * 100}%`,
-                }}
-              />
-            </div>
-            <div className="lesson-head">
-              <div>
-                <div className="breadcrumbs">
-                  <span>GO.{String(selectedModule?.order ?? 0).padStart(2, "0")}</span>
-                  <ChevronRight size={12} />
-                  <span>{(selectedModule?.level ?? "foundation").toUpperCase()}</span>
-                </div>
-                <h1>{lesson.title}</h1>
-                <p>{lesson.description}</p>
-                <div className="lesson-meta">
-                  <Badge>
-                    <Clock3 size={11} /> {lesson.estimatedMinutes} min
-                  </Badge>
-                  <Badge>{lesson.difficulty}</Badge>
-                  <Badge>{lesson.concepts.length} concepts</Badge>
-                  <Badge className={`state-badge state-${state}`}>{progressLabels[state]}</Badge>
-                  <Badge>Mastery evidence {score}%</Badge>
-                </div>
-              </div>
-              <div className="lesson-actions">
-                <button
-                  aria-label="Bookmark lesson"
-                  aria-pressed={bookmarks.includes(lesson.id)}
-                  className={bookmarks.includes(lesson.id) ? "active" : ""}
-                  onClick={() => toggleBookmark(lesson.id)}
-                >
-                  <Bookmark size={16} />
-                </button>
-                <Button onClick={() => setFocus((v) => !v)}>
-                  <Focus size={15} /> {focus ? "Exit focus" : "Focus"}
-                </Button>
-                <Button
-                  className={completed ? "completion-toggle completed" : "completion-toggle"}
-                  aria-pressed={completed}
-                  onClick={() => toggleLessonComplete(lesson.id)}
-                >
-                  <Check size={15} /> {completed ? "Completed" : "Mark complete"}
-                </Button>
-                <button className="reset-progress" onClick={resetCurrentLesson}>
-                  <RotateCcw size={14} /> Reset progress
-                </button>
-              </div>
-            </div>
-
-            {renderedStages.map(([id, number, label]) => (
-              <section
-                key={id}
-                id={`stage-${id}`}
-                data-stage={id}
-                ref={registerSection(id)}
-                className="stage-content"
-                aria-labelledby={`stage-${id}-heading`}
-              >
-                <div className="stage-number" aria-hidden>
-                  {number}
-                </div>
-                <SectionLabel>{label}</SectionLabel>
-                <h2 id={`stage-${id}-heading`}>{label}</h2>
-
-                <StageArticle content={normalizeStage(lesson.sections[id])} />
-
-                {renderWidget(id)}
-              </section>
-            ))}
-
-            {/* page-level extras pinned to the very bottom of the page */}
-            <section className="page-extras">
-              <div className="page-note">
-                <SectionLabel>Your note</SectionLabel>
-                <textarea
-                  aria-label="Lesson note"
-                  value={notes[lesson.id] ?? ""}
-                  onChange={(e) => setNote(lesson.id, e.target.value)}
-                  placeholder="Capture a question or invariant…"
-                />
-              </div>
-              <ReferenceList items={lesson.references} />
-            </section>
-          </>
-        ) : selectedTopic ? (
-          renderPreview(selectedTopic, selectedModule)
-        ) : null}
-      </main>
-
-      {/* RIGHT — stage outline (lesson) or topic context (preview) */}
+      {/* SECOND RAIL — stage outline (lesson) or topic context (preview) */}
       <aside className="page-toc-panel" id="toc-panel" aria-label="Table of contents">
         <div className="panel-close-row">
           <SectionLabel>
@@ -1509,16 +1830,19 @@ function Workspace({
             </button>
           </nav>
         ) : isLessonView ? (
-          <nav className="page-toc" aria-label="Lesson stages">
-            {renderedStages.map(([id, number, label]) => (
+          <nav className="page-toc" aria-label="Lesson chapters">
+            {renderedChapters.map((chapter) => (
               <button
-                key={id}
-                aria-current={activeStage === id ? "step" : undefined}
-                className={activeStage === id ? "active" : ""}
-                onClick={() => scrollToStage(id)}
+                key={chapter.id}
+                aria-current={activeChapterId === chapter.id ? "step" : undefined}
+                className={activeChapterId === chapter.id ? "active" : ""}
+                onClick={() => scrollToChapter(chapter.id)}
               >
-                <span className="toc-number">{number}</span>
-                <span className="toc-title">{label}</span>
+                <span className="toc-number">{chapter.number}</span>
+                <span className="toc-title">
+                  {chapter.label}
+                  {chapter.optional && <small>optional</small>}
+                </span>
               </button>
             ))}
           </nav>
@@ -1545,6 +1869,121 @@ function Workspace({
           </div>
         ) : null}
       </aside>
+
+      {/* CENTER — resources hub, the authored lesson (scroll-spied), or a topic preview */}
+      <main id="lesson-content" className="concept-workspace">
+        {resourcesOpen ? (
+          <ResourcesHub />
+        ) : lesson ? (
+          <>
+            <div className="reading-progress" aria-hidden>
+              <i
+                style={{
+                  width: `${((Math.max(activeChapterIndex, 0) + 1) / renderedChapters.length) * 100}%`,
+                }}
+              />
+            </div>
+            <div className="lesson-head">
+              <div>
+                <div className="breadcrumbs">
+                  <span>GO.{String(selectedModule?.order ?? 0).padStart(2, "0")}</span>
+                  <ChevronRight size={12} />
+                  <span>{(selectedModule?.level ?? "foundation").toUpperCase()}</span>
+                </div>
+                <h1>{lesson.title}</h1>
+                <p>{lesson.description}</p>
+                <div className="lesson-meta">
+                  <Badge>
+                    <Clock3 size={11} /> {lesson.estimatedMinutes} min
+                  </Badge>
+                  <Badge>{lesson.difficulty}</Badge>
+                  <Badge>{lesson.concepts.length} concepts</Badge>
+                  <Badge className={`state-badge state-${state}`}>{progressLabels[state]}</Badge>
+                  <Badge>Mastery evidence {score}%</Badge>
+                  <Badge>
+                    {coreChapterCount} core chapters{hasOptionalChapter ? " + optional depth" : ""}
+                  </Badge>
+                </div>
+              </div>
+              <div className="lesson-actions">
+                <button
+                  aria-label="Bookmark lesson"
+                  aria-pressed={bookmarks.includes(lesson.id)}
+                  className={bookmarks.includes(lesson.id) ? "active" : ""}
+                  onClick={() => toggleBookmark(lesson.id)}
+                >
+                  <Bookmark size={16} />
+                </button>
+                <Button onClick={() => setFocus((v) => !v)}>
+                  <Focus size={15} /> {focus ? "Exit focus" : "Focus"}
+                </Button>
+                <Button
+                  className={completed ? "completion-toggle completed" : "completion-toggle"}
+                  aria-pressed={completed}
+                  onClick={() => toggleLessonComplete(lesson.id)}
+                >
+                  <Check size={15} /> {completed ? "Completed" : "Mark complete"}
+                </Button>
+                <button className="reset-progress" onClick={resetCurrentLesson}>
+                  <RotateCcw size={14} /> Reset progress
+                </button>
+              </div>
+            </div>
+
+            {renderedChapters.map((chapter) => (
+              <section
+                key={chapter.id}
+                id={`chapter-${chapter.id}`}
+                className={chapter.optional ? "stage-content optional-chapter" : "stage-content"}
+                aria-labelledby={`chapter-${chapter.id}-heading`}
+              >
+                <div className="stage-number" aria-hidden>
+                  {chapter.number}
+                </div>
+                <SectionLabel>
+                  {chapter.optional ? "Optional depth" : `Chapter ${chapter.number}`}
+                </SectionLabel>
+                <h2 id={`chapter-${chapter.id}-heading`}>{chapter.label}</h2>
+                <p className="chapter-description">{chapter.description}</p>
+                {chapter.id === "big-picture" && frontendBridge[lesson.id] && (
+                  <aside className="frontend-bridge">
+                    <strong>From TypeScript</strong>
+                    <p>{frontendBridge[lesson.id]}</p>
+                  </aside>
+                )}
+
+                {chapter.optional ? (
+                  <details className="optional-depth">
+                    <summary>
+                      <span>Open optional depth</span>
+                      <small>Trade-offs for a later pass</small>
+                    </summary>
+                    {renderChapterStages(chapter)}
+                  </details>
+                ) : (
+                  renderChapterStages(chapter)
+                )}
+              </section>
+            ))}
+
+            {/* page-level extras pinned to the very bottom of the page */}
+            <section className="page-extras">
+              <div className="page-note">
+                <SectionLabel>Your note</SectionLabel>
+                <textarea
+                  aria-label="Lesson note"
+                  value={notes[lesson.id] ?? ""}
+                  onChange={(e) => setNote(lesson.id, e.target.value)}
+                  placeholder="Capture a question or invariant…"
+                />
+              </div>
+              <ReferenceList items={lesson.references} />
+            </section>
+          </>
+        ) : selectedTopic ? (
+          renderPreview(selectedTopic, selectedModule)
+        ) : null}
+      </main>
 
       {panel && <div className="panel-backdrop" onClick={() => setPanel(null)} aria-hidden />}
 

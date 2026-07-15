@@ -10,12 +10,10 @@ export { goProfilingPprof } from "./profiling-pprof";
 export const goModule7: CurriculumModule = {
   id: "go-7",
   courseId: "go",
-  title: "Testing & Tooling",
+  title: "Advanced Testing & Diagnostics — Optional",
   order: 7,
-  description:
-    "Table-driven tests, benchmarks, fuzzing, test doubles, vet/coverage/linting, and pprof profiling.",
+  description: "Benchmarks, fuzzing, test doubles, vet/coverage/linting, and pprof profiling.",
   lessonIds: [
-    "go-unit-table-tests",
     "go-benchmarks",
     "go-fuzzing",
     "go-mocks-fakes",

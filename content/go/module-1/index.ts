@@ -10,8 +10,7 @@ export const goModule1: CurriculumModule = {
   courseId: "go",
   title: "Values & Program Execution",
   order: 1,
-  description:
-    "The value model: types, zero values, constants, copy semantics, functions, and control flow.",
-  lessonIds: ["go-basic-types", "go-copy-semantics", "go-functions-defer", "go-control-flow"],
+  description: "Learn types, zero values, functions, and control flow.",
+  lessonIds: ["go-basic-types", "go-functions-defer", "go-control-flow"],
   projectId: "go-data-transform-cli",
 };

@@ -126,6 +126,8 @@ export const contentBlockSchema = z.discriminatedUnion("type", [
  * simple stages and legacy content.
  */
 export const stageContentSchema = z.object({
+  /** Topic-specific heading shown above this stage. Falls back to the shared UI label. */
+  title: z.string().min(1).optional(),
   body: z.string().min(1),
   keyPoints: z.array(z.string().min(1)).optional(),
   example: stageExampleSchema.optional(),
@@ -162,11 +164,15 @@ export const lessonSchema = z.object({
   prerequisites: z.array(z.string()),
   learningObjectives: z.array(z.string()).min(1),
   concepts: z.array(z.string()).min(1),
-  ledgerFlowApplications: z.array(z.string()),
+  // Kept optional so the shared schema can still validate the separate Backend
+  // Atlas while language-only courses stay free of project-specific framing.
+  ledgerFlowApplications: z.array(z.string()).optional(),
   references: z.array(referenceSchema),
   exercises: z.array(exerciseSchema).min(1),
   masteryCriteria: z.array(masteryCriterionSchema).min(1),
-  sections: z.record(z.enum(lessonStages), stageValueSchema),
+  // Courses may use only the stages that help a particular lesson. Requiring
+  // every stage produced repetitive filler and an unnecessarily long path.
+  sections: z.partialRecord(z.enum(lessonStages), stageValueSchema),
 });
 
 export type Lesson = z.infer<typeof lessonSchema>;

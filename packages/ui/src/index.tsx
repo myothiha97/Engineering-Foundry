@@ -58,16 +58,32 @@ function renderInline(text: string): ReactNode[] {
 }
 
 function Paragraphs({ text }: { text: string }) {
+  const segments = text.split(/(```[\s\S]*?```)/g).filter(Boolean);
   return (
     <>
-      {text
-        .split("\n\n")
-        .filter(Boolean)
-        .map((p, i) => (
-          <p className="stage-para" key={i}>
-            {renderInline(p)}
-          </p>
-        ))}
+      {segments.flatMap((segment, segmentIndex) => {
+        if (segment.startsWith("```") && segment.endsWith("```")) {
+          const fenced = segment.slice(3, -3).replace(/^\n/, "").replace(/\n$/, "");
+          const firstNewline = fenced.indexOf("\n");
+          const firstLine = firstNewline === -1 ? "" : fenced.slice(0, firstNewline).trim();
+          const hasLanguageLabel = /^[a-zA-Z0-9_+-]+$/.test(firstLine);
+          const code = hasLanguageLabel ? fenced.slice(firstNewline + 1) : fenced;
+          return (
+            <pre className="stage-inline-code-block" key={`code-${segmentIndex}`}>
+              <code>{code}</code>
+            </pre>
+          );
+        }
+
+        return segment
+          .split("\n\n")
+          .filter(Boolean)
+          .map((paragraph, paragraphIndex) => (
+            <p className="stage-para" key={`text-${segmentIndex}-${paragraphIndex}`}>
+              {renderInline(paragraph)}
+            </p>
+          ));
+      })}
     </>
   );
 }
@@ -138,7 +154,9 @@ export function StageDiagram({ diagram }: { diagram: StageDiagramSpec }) {
           </div>
         ))}
       </div>
-      {diagram.caption && <figcaption className="stage-diagram-caption">{diagram.caption}</figcaption>}
+      {diagram.caption && (
+        <figcaption className="stage-diagram-caption">{diagram.caption}</figcaption>
+      )}
     </figure>
   );
 }
@@ -170,8 +188,12 @@ export function StageArticle({ content }: { content: StageContent }) {
   return (
     <div className="stage-article">
       <Paragraphs text={content.body} />
-      {content.keyPoints && content.keyPoints.length > 0 ? <KeyPoints items={content.keyPoints} /> : null}
-      {content.blocks?.map((block, i) => <Block block={block} key={i} />)}
+      {content.keyPoints && content.keyPoints.length > 0 ? (
+        <KeyPoints items={content.keyPoints} />
+      ) : null}
+      {content.blocks?.map((block, i) => (
+        <Block block={block} key={i} />
+      ))}
       {content.example ? <CodeExample example={content.example} /> : null}
       {content.scenario ? <Scenario scenario={content.scenario} /> : null}
     </div>
@@ -179,7 +201,13 @@ export function StageArticle({ content }: { content: StageContent }) {
 }
 
 /** External learning resources for a lesson (reference form: what it teaches). */
-export function ReferenceList({ items, title = "Further reading" }: { items: Reference[]; title?: string }) {
+export function ReferenceList({
+  items,
+  title = "Further reading",
+}: {
+  items: Reference[];
+  title?: string;
+}) {
   if (!items.length) return null;
   return (
     <div className="reference-list">
@@ -191,7 +219,9 @@ export function ReferenceList({ items, title = "Further reading" }: { items: Ref
               <span className="reference-title">
                 {r.title}
                 <em className={r.required ? "reference-req" : "reference-opt"}>
-                  {r.required ? "required" : "optional"}
+                  {["go.dev", "pkg.go.dev"].includes(new URL(r.url).hostname)
+                    ? `official · ${r.required ? "required" : "optional"}`
+                    : `supplemental · ${r.required ? "required" : "optional"}`}
                 </em>
               </span>
               <small>{r.teaches}</small>

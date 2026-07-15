@@ -12,7 +12,7 @@ export const goModule5: CurriculumModule = {
   courseId: "go",
   title: "Standard Library & I/O",
   order: 5,
-  description: "Reader/Writer, files, JSON, time, context, HTTP, and CLIs.",
+  description: "Reader/Writer, files, JSON, time, HTTP, and relational databases.",
   lessonIds: [
     "go-io-reader-writer",
     "go-files-os",

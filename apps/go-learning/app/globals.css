@@ -52,8 +52,20 @@ a {
 /* ---------- app shell ---------- */
 .go-app {
   display: grid;
-  grid-template: 64px calc(100vh - 64px) / 280px minmax(0, 1fr) 300px;
+  grid-template: 64px calc(100vh - 64px) / 280px 248px minmax(0, 1fr);
   min-height: 100vh;
+}
+.curriculum {
+  grid-row: 2;
+  grid-column: 1;
+}
+.page-toc-panel {
+  grid-row: 2;
+  grid-column: 2;
+}
+.concept-workspace {
+  grid-row: 2;
+  grid-column: 3;
 }
 .go-topbar {
   grid-column: 1/-1;
@@ -120,7 +132,7 @@ a {
   align-items: center;
   gap: 4px;
   text-decoration: none;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   color: var(--muted);
   border-left: 1px solid var(--line);
   padding-left: 12px;
@@ -262,9 +274,8 @@ a {
 
 /* ---------- topic preview (planned topics) ---------- */
 .topic-preview {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 30px 3vw 60px;
+  max-width: var(--content-measure);
+  padding: 30px var(--content-gutter) 60px;
   display: flex;
   flex-direction: column;
   gap: 30px;
@@ -373,14 +384,16 @@ a {
 
 /* ---------- workspace ---------- */
 .concept-workspace {
+  /* readable measure, anchored to the left rails instead of centered */
+  --content-measure: 1120px;
+  --content-gutter: clamp(40px, 5vw, 104px);
   overflow: auto;
   scrollbar-color: var(--line) transparent;
   min-width: 0;
 }
 .lesson-head {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 34px 3vw 24px;
+  max-width: var(--content-measure);
+  padding: 34px var(--content-gutter) 24px;
   display: flex;
   justify-content: space-between;
   gap: 2rem;
@@ -489,9 +502,8 @@ a {
 /* center content — stacked, scroll-spied sections in one readable column */
 .stage-content {
   position: relative;
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 44px 3vw 48px;
+  max-width: var(--content-measure);
+  padding: 44px var(--content-gutter) 48px;
   scroll-margin-top: 1.5rem;
 }
 .stage-content + .stage-content {
@@ -500,9 +512,8 @@ a {
 
 /* page-level extras pinned to the very bottom of the page */
 .page-extras {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 0 3vw 70px;
+  max-width: var(--content-measure);
+  padding: 0 var(--content-gutter) 70px;
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -523,16 +534,22 @@ a {
 /* inline inspector shown inside the interactive diagram stage */
 .diagram-inspector {
   border-top: 1px solid var(--line);
-  padding: 14px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 .diagram-inspector p {
   margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: 1rem;
+  line-height: 1.65;
   color: var(--muted);
+}
+.diagram-inspector .inspect-value span {
+  font-size: 0.78rem;
+}
+.diagram-inspector .inspect-value strong {
+  font-size: 1.05rem;
 }
 .diagram-inspector .invariant {
   border-left: 2px solid var(--accent);
@@ -540,10 +557,10 @@ a {
   color: #b7c9cd;
 }
 
-/* right rail — page outline (table of contents) */
+/* left rail (next to the curriculum) — page outline (table of contents) */
 .page-toc-panel {
   overflow: auto;
-  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
   background: #0a1013;
   padding: 20px 14px;
 }
@@ -584,6 +601,17 @@ a {
 .page-toc button.active .toc-number {
   color: var(--accent);
 }
+.toc-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.toc-title small {
+  color: var(--faint);
+  font: 500 0.62rem var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .stage-number {
   position: absolute;
   right: 0;
@@ -598,6 +626,85 @@ a {
   letter-spacing: -0.025em;
   line-height: 1.1;
 }
+.chapter-description {
+  max-width: 62ch;
+  margin: -0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.frontend-bridge {
+  max-width: 68ch;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid #22515b;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: #0b171a;
+}
+.frontend-bridge strong {
+  color: var(--accent);
+  font: 650 0.72rem var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.frontend-bridge p {
+  margin: 7px 0 0;
+  color: #bdd0d5;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+.chapter-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  margin-top: 28px;
+}
+.lesson-subsection {
+  scroll-margin-top: 1.5rem;
+}
+.lesson-subsection + .lesson-subsection {
+  border-top: 1px solid var(--line);
+  padding-top: 30px;
+}
+.lesson-subsection > h3 {
+  max-width: 68ch;
+  margin: 0 0 1rem;
+  color: var(--ink);
+  font-size: 1.18rem;
+  line-height: 1.3;
+}
+.optional-chapter {
+  background: linear-gradient(90deg, #0d141855, transparent 70%);
+}
+.optional-depth {
+  max-width: 68ch;
+  margin-top: 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.optional-depth > summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 15px 18px;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 650;
+}
+.optional-depth > summary small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 450;
+}
+.optional-depth[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.optional-depth > .chapter-stages {
+  margin: 0;
+  padding: 22px 18px;
+}
 
 /* ---------- structured stage content ---------- */
 .stage-article {
@@ -611,6 +718,17 @@ a {
   color: #c6d5d9;
   max-width: 68ch;
   margin: 0;
+}
+.stage-inline-code-block {
+  max-width: 100%;
+  margin: 0;
+  padding: 16px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #06090b;
+  color: #d5e3e6;
+  font: 0.9rem/1.65 var(--mono);
 }
 .inline-code {
   font: 0.92em var(--mono);
@@ -1037,49 +1155,159 @@ a {
   background: #080c0f;
   overflow: hidden;
 }
-.flow-diagram svg {
-  width: 100%;
-  height: auto;
-  min-height: 220px;
-  color: var(--accent);
-  padding: 8px;
+.flow-diagram {
+  container-type: inline-size;
+  padding: 22px;
 }
-.flow-diagram g {
-  cursor: pointer;
+.flow-diagram-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
 }
-.flow-diagram rect {
-  fill: var(--surface-2);
-  stroke: var(--line);
+.flow-phase-panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #1b4549;
+  border-radius: 10px;
+  background: rgba(10, 22, 26, 0.55);
 }
-.flow-diagram text {
-  fill: var(--muted);
-  font: 500 13px var(--mono);
+.flow-phase-panel.phase-run {
+  border-color: #38335e;
+  background: rgba(26, 22, 52, 0.24);
 }
-.flow-diagram g.is-selected rect {
-  stroke: var(--accent);
-  fill: var(--accent-soft);
+.flow-phase-panel header span,
+.flow-phase-panel header small {
+  display: block;
 }
-.flow-diagram g.is-selected text {
-  fill: var(--accent);
+.flow-phase-panel header span {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 700;
 }
-.diagram-legend {
-  display: flex;
-  gap: 20px;
-  border-top: 1px solid var(--line);
-  padding: 11px 14px;
+.flow-phase-panel header small {
+  margin-top: 3px;
   color: var(--muted);
-  font: 0.78rem var(--mono);
+  font-size: 0.84rem;
 }
-.diagram-legend i {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
+.flow-phase-panel ol {
+  display: grid;
+  gap: 16px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.flow-phase-panel li {
+  position: relative;
+}
+.flow-phase-panel li:not(:last-child)::after {
+  content: "↓";
+  position: absolute;
+  left: 20px;
+  bottom: -17px;
+  color: var(--accent);
+  font: 700 0.9rem var(--mono);
+}
+.flow-phase-panel button {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  text-align: left;
+}
+.flow-phase-panel button:hover,
+.flow-phase-panel button.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.flow-step-number {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
   border-radius: 50%;
-  margin-right: 6px;
-  background: var(--accent);
+  background: rgba(74, 222, 204, 0.12);
+  color: var(--accent);
+  font: 600 0.78rem var(--mono);
 }
-.diagram-legend i.runtime {
-  background: #8c7cff;
+.flow-step-copy strong,
+.flow-step-copy small {
+  display: block;
+}
+.flow-step-copy strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+.flow-step-copy small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.flow-handoff {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+.flow-handoff span {
+  color: var(--faint);
+  font: 600 0.68rem var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.flow-handoff b {
+  font-size: 1.6rem;
+}
+.diagram-inspector-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.diagram-inspector-meta div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.diagram-inspector-meta dt {
+  margin-bottom: 4px;
+  color: var(--faint);
+  font: 600 0.72rem var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.diagram-inspector-meta dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.diagram-inspector-meta a {
+  color: var(--accent);
+}
+@media (max-width: 900px) {
+  .flow-diagram-grid {
+    grid-template-columns: 1fr;
+  }
+  .flow-handoff b {
+    transform: rotate(90deg);
+  }
+}
+@container (max-width: 780px) {
+  .flow-diagram-grid {
+    grid-template-columns: 1fr;
+  }
+  .flow-handoff b {
+    transform: rotate(90deg);
+  }
 }
 .experiment {
   padding: 20px;
@@ -1189,6 +1417,50 @@ a {
   flex-direction: column;
   gap: 14px;
   margin-top: 10px;
+}
+.exercise-path-note {
+  margin: 0 0 2px;
+  padding: 11px 13px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  background: var(--accent-soft);
+  color: #c6d5d9;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.exercise-more {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 12px;
+}
+.exercise-more > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.exercise-more > summary span {
+  color: var(--faint);
+  font: 500 0.68rem var(--mono);
+  text-transform: uppercase;
+}
+.exercise-more[open] > summary {
+  border-color: var(--accent);
+}
+.exercise-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
 }
 .exercise-card {
   border: 1px solid var(--line);
@@ -1321,12 +1593,7 @@ a {
 
 /* ---------- challenge checkpoint ---------- */
 .challenge-block {
-  margin-top: 10px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  margin-top: 6px;
 }
 .challenge-intro {
   margin: 0;
@@ -1568,14 +1835,11 @@ a {
 
 /* ---------- focus mode ---------- */
 .focus-mode {
-  grid-template-columns: 0 minmax(0, 1fr) 0;
+  grid-template-columns: 0 0 minmax(0, 1fr);
 }
 .focus-mode .curriculum,
 .focus-mode .page-toc-panel {
   display: none;
-}
-.focus-mode .concept-workspace {
-  grid-column: 2;
 }
 .focus-mode .go-brand,
 .focus-mode .search-trigger,
@@ -1634,11 +1898,17 @@ a {
   .page-toc-panel {
     display: none;
   }
+  .concept-workspace {
+    grid-column: 2;
+  }
   .toc-trigger {
     display: grid;
   }
   .go-app.focus-mode {
     grid-template-columns: 1fr;
+  }
+  .go-app.focus-mode .concept-workspace {
+    grid-column: 1;
   }
 }
 @media (max-width: 760px) {
@@ -1709,7 +1979,7 @@ a {
   left: 0;
 }
 .go-app[data-panel="toc"] .page-toc-panel {
-  right: 0;
+  left: 0;
 }
 .go-app[data-panel="nav"] .curriculum .panel-close,
 .go-app[data-panel="toc"] .page-toc-panel .panel-close {
@@ -1887,9 +2157,8 @@ a {
   background: var(--accent-soft);
 }
 .hub-body {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 30px 3vw 40px;
+  max-width: var(--content-measure);
+  padding: 30px var(--content-gutter) 40px;
   display: flex;
   flex-direction: column;
   gap: 36px;
@@ -2600,8 +2869,8 @@ a {
 .top-links a {
   text-decoration: none;
   color: var(--muted);
-  font: 500 0.82rem var(--sans);
-  padding: 7px 10px;
+  font: 500 0.9rem var(--sans);
+  padding: 8px 12px;
   border-radius: 7px;
 }
 .top-links a:hover {

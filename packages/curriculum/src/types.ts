@@ -18,7 +18,6 @@ export type CurriculumTopic = {
   prerequisites: string[];
   whyNow: string;
   learnerOutcome: string;
-  ledgerFlowApplication: string;
   status: CurriculumStatus;
   /** links to an authored lesson in content/ when status === "authored" */
   lessonId?: string;

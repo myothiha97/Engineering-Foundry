@@ -1,6 +1,5 @@
 import type { CurriculumModule } from "../../../packages/content-schema/src/index";
 
-export { goEscapeAnalysisDeep } from "./escape-analysis-deep";
 export { goGcTuning } from "./gc-tuning";
 export { goReflection } from "./reflection";
 export { goUnsafeCgo } from "./unsafe-cgo";
@@ -9,16 +8,15 @@ export { goModulesAdvanced } from "./modules-advanced";
 export const goModule8: CurriculumModule = {
   id: "go-8",
   courseId: "go",
-  title: "Runtime, Performance & the Deep End",
+  title: "Advanced Go — Optional Deep Dives",
   order: 8,
-  description:
-    "Escape analysis in depth, GC behavior & tuning, reflection, unsafe & cgo, and advanced modules/versioning.",
+  description: "GC behavior, reflection, unsafe and cgo, plus advanced module versioning.",
   lessonIds: [
-    "go-escape-analysis-deep",
+    "go-toolchain-modules",
     "go-gc-tuning",
     "go-reflection",
     "go-unsafe-cgo",
     "go-modules-advanced",
   ],
-  projectId: "go-ledger-core-optimized",
+  projectId: "go-performance-lab",
 };

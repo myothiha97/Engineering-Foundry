@@ -15,13 +15,7 @@ import {
   goStackHeapEscape,
   goModule2,
 } from "./module-2";
-import {
-  goInterfaces,
-  goAssertionsSwitches,
-  goEmbedding,
-  goGenerics,
-  goModule3,
-} from "./module-3";
+import { goInterfaces, goAssertionsSwitches, goEmbedding, goGenerics, goModule3 } from "./module-3";
 import {
   goErrorValues,
   goErrorWrapping,
@@ -43,7 +37,6 @@ import {
   goChannelsSelect,
   goSyncAtomic,
   goContextCancellation,
-  goRacesDetector,
   goConcurrencyPatterns,
   goModule6,
 } from "./module-6";
@@ -56,14 +49,7 @@ import {
   goProfilingPprof,
   goModule7,
 } from "./module-7";
-import {
-  goEscapeAnalysisDeep,
-  goGcTuning,
-  goReflection,
-  goUnsafeCgo,
-  goModulesAdvanced,
-  goModule8,
-} from "./module-8";
+import { goGcTuning, goReflection, goUnsafeCgo, goModulesAdvanced, goModule8 } from "./module-8";
 
 /**
  * Every authored Go lesson, in curriculum order. The workspace opens any lesson
@@ -73,15 +59,15 @@ import {
  */
 export const goLessons: Lesson[] = [
   goSourceToProcess,
-  goToolchainModules,
   goBasicTypes,
-  goCopySemantics,
   goFunctionsDefer,
   goControlFlow,
+  goStructsPointers,
+  goCopySemantics,
   goSlices,
   goMaps,
   goStringsRunes,
-  goStructsPointers,
+  goUnitTableTests,
   goStackHeapEscape,
   goInterfaces,
   goAssertionsSwitches,
@@ -101,15 +87,13 @@ export const goLessons: Lesson[] = [
   goChannelsSelect,
   goSyncAtomic,
   goContextCancellation,
-  goRacesDetector,
   goConcurrencyPatterns,
-  goUnitTableTests,
   goBenchmarks,
   goFuzzing,
   goMocksFakes,
   goVetCoverage,
   goProfilingPprof,
-  goEscapeAnalysisDeep,
+  goToolchainModules,
   goGcTuning,
   goReflection,
   goUnsafeCgo,

@@ -10,8 +10,7 @@ export const goModule4: CurriculumModule = {
   courseId: "go",
   title: "Errors & Program Design",
   order: 4,
-  description:
-    "Error values, wrapping and inspection, panic/recover, and dependency direction.",
+  description: "Error values, wrapping and inspection, panic/recover, and dependency direction.",
   lessonIds: [
     "go-error-values",
     "go-error-wrapping",
