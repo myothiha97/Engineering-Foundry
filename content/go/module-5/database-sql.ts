@@ -6,8 +6,7 @@ import type { Lesson } from "../../../packages/content-schema/src/index";
  * Modules 0–4: plain language, one analogy per hard idea, a concrete example
  * before every abstract rule. Reformats the go.dev "Accessing relational
  * databases" material into learner-facing prose. Correct and idiomatic for a
- * modern Go + PostgreSQL stack (pgx driver, Context-aware calls). This lesson
- * is security- and correctness-critical: it unlocks LedgerFlow persistence.
+ * modern Go + PostgreSQL stack (pgx driver, context-aware calls).
  */
 export const goDatabaseSql: Lesson = {
   id: "go-database-sql",
@@ -31,11 +30,6 @@ export const goDatabaseSql: Lesson = {
     "transactions",
     "sql-injection",
   ],
-  ledgerFlowApplications: [
-    "Open one pooled *sql.DB at startup and share it across every LedgerFlow request handler instead of dialing Postgres per request",
-    "Insert a transaction row and recalculate the running balance inside a single BeginTx/Commit unit so a balance is never left half-updated",
-    "Build every WHERE and INSERT with $1/$2 placeholders so a hostile account name or memo can never alter the SQL",
-  ],
   references: [
     {
       title: "Tutorial: Accessing a relational database",
@@ -44,7 +38,7 @@ export const goDatabaseSql: Lesson = {
         "The end-to-end mechanics of Open, QueryContext with Scan, QueryRowContext with sql.ErrNoRows, and ExecContext for inserts, using a real driver.",
       relevance:
         "A hands-on walkthrough of exactly the calls this lesson teaches, from opening the pool to reading rows.",
-      required: true,
+      required: false,
       section: "Get a database handle and connect; Query for multiple rows; Add data",
     },
     {
@@ -54,7 +48,7 @@ export const goDatabaseSql: Lesson = {
         "Why *sql.DB is a pool, how to configure it (SetMaxOpenConns and friends), and the canonical patterns for transactions, prepared statements, and NULL handling.",
       relevance:
         "The reference guide behind every design decision in this lesson — the pool, Context calls, and the defer-rollback transaction pattern.",
-      required: true,
+      required: false,
       section: "Opening a database handle; Executing transactions; Managing connections",
     },
     {
@@ -64,7 +58,7 @@ export const goDatabaseSql: Lesson = {
         "Why placeholder parameters (not string formatting) are the defense against SQL injection, and how the driver keeps data separate from SQL text.",
       relevance:
         "The authoritative statement of the #1 rule in this lesson: never concatenate user input into a query.",
-      required: true,
+      required: false,
       section: "Using parameters; What not to do",
     },
   ],
@@ -73,7 +67,7 @@ export const goDatabaseSql: Lesson = {
       id: "go5db-predict-open",
       type: "prediction",
       prompt:
-        "A service calls `db, err := sql.Open(\"pgx\", dsn)` at startup with the database server switched OFF, then checks `err`. Predict whether `err` is non-nil, and predict what would instead surface the connection failure.",
+        'A service calls `db, err := sql.Open("pgx", dsn)` at startup with the database server switched OFF, then checks `err`. Predict whether `err` is non-nil, and predict what would instead surface the connection failure.',
       expectedAnswer:
         "err is nil — sql.Open only validates arguments and prepares the pool; it does not dial the database. The connection failure surfaces on first real use, or immediately if you call db.PingContext(ctx).",
       hints: [
@@ -88,7 +82,7 @@ export const goDatabaseSql: Lesson = {
         "Read `q := fmt.Sprintf(\"SELECT * FROM accounts WHERE name = '%s'\", name)` followed by `db.QueryContext(ctx, q)`. Explain what happens when `name` is `x' OR '1'='1`, and rewrite it the safe way.",
       hints: [
         "Sprintf pastes the user's text directly INTO the SQL, so their quotes become part of the query.",
-        "Pass the value as a parameter: db.QueryContext(ctx, \"SELECT * FROM accounts WHERE name = $1\", name).",
+        'Pass the value as a parameter: db.QueryContext(ctx, "SELECT * FROM accounts WHERE name = $1", name).',
       ],
     },
     {
@@ -172,7 +166,7 @@ export const goDatabaseSql: Lesson = {
       id: "design-persistence",
       kind: "design",
       description:
-        "Design LedgerFlow's persistence layer: where the pool lives, where transactions wrap writes, and how NULL and 'not found' are handled.",
+        "Design a notes API persistence layer: where the pool lives, where database transactions wrap writes, and how NULL and 'not found' are handled.",
       required: false,
     },
   ],
@@ -198,82 +192,8 @@ export const goDatabaseSql: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The first instinct, coming from other languages or from shell scripting, is to build the query as a string and paste the user's values straight into it. It reads naturally and it works in the demo:\n\n`q := fmt.Sprintf(\"SELECT balance FROM accounts WHERE name = '%s'\", name)`\n\nA second naive instinct is to treat the connection like a file you open and close: dial the database at the start of each request, run the query, close it at the end. Both instincts feel tidy. Both are quietly wrong — the first is a security hole, the second throws away performance and will exhaust your database under load.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "The two tempting shortcuts",
-            language: "go",
-            code:
-              '// Shortcut 1: paste the value into the SQL text.\nname := r.URL.Query().Get("name")\nq := fmt.Sprintf("SELECT balance FROM accounts WHERE name = \'%s\'", name)\nrows, _ := db.QueryContext(ctx, q) // looks fine... until name contains a quote\n\n// Shortcut 2: open a fresh connection per request.\nfunc handle(w http.ResponseWriter, r *http.Request) {\n    db, _ := sql.Open("pgx", dsn) // a NEW pool every request\n    defer db.Close()\n    // ...\n}',
-            takeaway:
-              "Shortcut 1 lets a user rewrite your query. Shortcut 2 spins up and tears down a connection pool per request, defeating the whole point of pooling.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Pasting user input into SQL text (string formatting) is the classic SQL-injection mistake.",
-            "Opening a database per request is wasteful — `*sql.DB` is meant to be created once and reused.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "Watch shortcut 1 fail. Your query is `... WHERE name = '<name>'`. A normal user sends `Alice` and gets one row. An attacker sends `x' OR '1'='1` as the name. Because you pasted it in with `Sprintf`, the database now receives `... WHERE name = 'x' OR '1'='1'` — a condition that is always true — and happily returns *every* account. With a slightly nastier input the same hole can drop tables. The compiler never warned you, the demo passed, and the test with `Alice` passed. The bug only appears when someone feeds you a value containing a quote. This is **SQL injection**, and it is one of the most common serious vulnerabilities in real systems.\n\nThe root cause is a confusion of two things that must stay separate: the **SQL text** (which you, the programmer, control) and the **data values** (which the user controls). The moment user data becomes part of the SQL text, the user can write SQL.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "One quote turns a lookup into a dump",
-            context:
-              "A search box builds `WHERE name = '<input>'` with fmt.Sprintf. A user types `x' OR '1'='1`. The query returns every account in the table; a variant with a semicolon could delete data.",
-            insight:
-              "The user's quote closed your string literal and the rest became SQL. Data was allowed to become code — that is exactly what parameterized placeholders prevent.",
-          },
-        },
-        {
-          type: "note",
-          note: {
-            tone: "warning",
-            title: "The rule this lesson exists to teach",
-            text: "NEVER build SQL by concatenating or formatting user input into the query string. Always send values as parameters through placeholders ($1, $2 for Postgres; ? for MySQL/SQLite). The driver keeps data and SQL text strictly apart.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Fix both shortcuts with two mental shifts.\n\nFirst, the connection. `sql.Open` does not give you a single connection you must nurse — it gives you a `*sql.DB`, which is a **connection pool**: a managed set of connections that it opens, hands out, reclaims, and reuses for you. It is safe for many goroutines to use at once. So you open it *once* at startup, keep it for the life of the program, and share it everywhere. You never open one per request.\n\nSecond, the values. Instead of pasting a value into the SQL, you leave a numbered **placeholder** (`$1`, `$2`, …) where the value goes and pass the actual value as a separate argument. The SQL text and the data travel on separate tracks all the way to the database, so a value can never be mistaken for SQL. This is also what a **prepared statement** does under the hood — the query is parsed once with holes in it, then the holes are filled with data.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "One pool, many callers — SQL and data kept apart",
-            kind: "flow",
-            nodes: [
-              { id: "app", label: "your handlers", detail: "many goroutines" },
-              { id: "db", label: "*sql.DB", detail: "the pool (opened once)", tone: "accent" },
-              { id: "conns", label: "connections", detail: "opened & reused for you" },
-              { id: "pg", label: "PostgreSQL", detail: "SQL text + params arrive separately", tone: "success" },
-            ],
-            caption:
-              "The pool sits between your code and the server. Placeholders keep user data on a separate track from the SQL text.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "`*sql.DB` is a POOL — open once, share everywhere, safe for concurrent use.",
-            "Placeholders (`$1`, `$2`) send data on a separate track from the SQL, closing the injection hole.",
-            "This is what a prepared statement does: parse the query once, fill the holes with data.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "Carry four sentences and the whole package falls into place.\n\nFirst: **`*sql.DB` is a pool, and `sql.Open` doesn't connect.** Open just validates your arguments and sets up the pool; the first real connection happens lazily on first use (or when you call `db.PingContext`). Second: **use the Context variants of every call** — `QueryContext`, `QueryRowContext`, `ExecContext` — so a slow query can be cancelled by a timeout or a dropped client, exactly as you learned in the time & context lesson. Third: **placeholders, always.** Every user value goes through `$1`/`$2`, never into the SQL string. Fourth: **pick the call by shape of result** — `QueryContext` for many rows, `QueryRowContext` for exactly one, `ExecContext` for writes that return no rows (INSERT/UPDATE/DELETE).",
+      body: "Carry four sentences and the whole package falls into place.\n\nFirst: **`*sql.DB` is a pool, and `sql.Open` doesn't connect. ** Open just validates your arguments and sets up the pool; the first real connection happens lazily on first use (or when you call `db.PingContext`).\n\nSecond: **use the Context variants of every call** — `QueryContext`, `QueryRowContext`, `ExecContext` — so a slow query can be cancelled by a timeout or a dropped client, exactly as you learned in the time & context lesson. Third: **placeholders, always. ** Every user value goes through `$1`/`$2`, never into the SQL string.\n\nFourth: **pick the call by shape of result** — `QueryContext` for many rows, `QueryRowContext` for exactly one, `ExecContext` for writes that return no rows (INSERT/UPDATE/DELETE).",
       blocks: [
         {
           type: "note",
@@ -294,7 +214,7 @@ export const goDatabaseSql: Lesson = {
       ],
     },
     mechanics: {
-      body: "The precise picture. You import the driver for its **side effect**: `import _ \"github.com/jackc/pgx/v5/stdlib\"`. The blank identifier `_` means 'I don't reference this package by name, I just need its `init()` to run' — and that `init()` registers the driver under a name (here, `\"pgx\"`) so `sql.Open(\"pgx\", dsn)` can find it. You then use only the standard `database/sql` API; the driver stays invisible.\n\nReading many rows is a loop with a strict shape. `rows, err := db.QueryContext(ctx, sql, args...)` gives you a `*sql.Rows` cursor. You **must** `defer rows.Close()` immediately (it returns the underlying connection to the pool). Then `for rows.Next()` advances one row at a time and `rows.Scan(&x, &y)` copies that row's columns into your variables — the pointer count and order must match the SELECT. After the loop you **must** check `rows.Err()`, because `rows.Next()` returns `false` both when the data is exhausted *and* when an error stopped it early; only `rows.Err()` distinguishes them. For a single row, `db.QueryRowContext(...).Scan(&x)` combines query and read; if nothing matched, `Scan` returns the sentinel `sql.ErrNoRows`, which you detect with `errors.Is`. For writes, `res, err := db.ExecContext(...)` returns a `sql.Result` you can ask for `RowsAffected()`.",
+      body: 'The precise picture. You import the driver for its **side effect**: `import _ "github.com/jackc/pgx/v5/stdlib"`. The blank identifier `_` means \'I don\'t reference this package by name, I just need its `init()` to run\' — and that `init()` registers the driver under a name (here, `"pgx"`) so `sql.Open("pgx", dsn)` can find it. You then use only the standard `database/sql` API; the driver stays invisible.\n\nReading many rows is a loop with a strict shape. `rows, err := db.QueryContext(ctx, sql, args...)` gives you a `*sql.Rows` cursor. You **must** `defer rows.Close()` immediately (it returns the underlying connection to the pool). Then `for rows.Next()` advances one row at a time and `rows.Scan(&x, &y)` copies that row\'s columns into your variables — the pointer count and order must match the SELECT.\n\nAfter the loop you **must** check `rows.Err()`, because `rows.Next()` returns `false` both when the data is exhausted *and* when an error stopped it early; only `rows.Err()` distinguishes them. For a single row, `db.QueryRowContext(...). Scan(&x)` combines query and read; if nothing matched, `Scan` returns the sentinel `sql.ErrNoRows`, which you detect with `errors.Is`. For writes, `res, err := db.ExecContext(...)` returns a `sql.Result` you can ask for `RowsAffected()`.',
       blocks: [
         {
           type: "diagram",
@@ -302,10 +222,28 @@ export const goDatabaseSql: Lesson = {
             title: "The rows loop (Query for many rows)",
             kind: "sequence",
             nodes: [
-              { id: "q", label: "rows, err := db.QueryContext(ctx, sql, args...)", detail: "run query, get a cursor" },
-              { id: "close", label: "defer rows.Close()", detail: "return the connection to the pool — do this now", tone: "accent" },
-              { id: "loop", label: "for rows.Next() { rows.Scan(&...) }", detail: "one row per iteration; pointers match columns" },
-              { id: "err", label: "if err := rows.Err(); err != nil", detail: "Next() == false could mean error, not just done", tone: "danger" },
+              {
+                id: "q",
+                label: "rows, err := db.QueryContext(ctx, sql, args...)",
+                detail: "run query, get a cursor",
+              },
+              {
+                id: "close",
+                label: "defer rows.Close()",
+                detail: "return the connection to the pool — do this now",
+                tone: "accent",
+              },
+              {
+                id: "loop",
+                label: "for rows.Next() { rows.Scan(&...) }",
+                detail: "one row per iteration; pointers match columns",
+              },
+              {
+                id: "err",
+                label: "if err := rows.Err(); err != nil",
+                detail: "Next() == false could mean error, not just done",
+                tone: "danger",
+              },
             ],
             caption:
               "defer Close and check rows.Err() are not optional — skipping them leaks connections or hides mid-iteration failures.",
@@ -316,16 +254,15 @@ export const goDatabaseSql: Lesson = {
           example: {
             title: "Import the driver for its side effect",
             language: "go",
-            code:
-              'import (\n\t"database/sql"\n\n\t_ "github.com/jackc/pgx/v5/stdlib" // blank import: runs init(), registers "pgx"\n)\n\n// Now the standard API can find the driver by name.\ndb, err := sql.Open("pgx", "postgres://learning:learning@localhost:5432/app")',
+            code: 'import (\n\t"database/sql"\n\n\t_ "github.com/jackc/pgx/v5/stdlib" // blank import: runs init(), registers "pgx"\n)\n\n// Now the standard API can find the driver by name.\nfunc openDB() (*sql.DB, error) {\n    return sql.Open("pgx", "postgres://learning:learning@localhost:5432/app")\n}',
             takeaway:
-              'The `_` import runs the driver\'s init() (which calls sql.Register) without you referencing it directly. After that you touch only database/sql.',
+              "The `_` import runs the driver's init() (which calls sql.Register) without you referencing it directly. After that you touch only database/sql.",
           },
         },
         {
           type: "points",
           items: [
-            "`import _ \"...driver\"` runs the driver's `init()` so `sql.Open` can find it by name.",
+            '`import _ "...driver"` runs the driver\'s `init()` so `sql.Open` can find it by name.',
             "`defer rows.Close()` immediately after a successful `QueryContext` — it frees the connection.",
             "After the loop, check `rows.Err()`; `rows.Next()` returning false can mean 'error', not just 'done'.",
             "`QueryRowContext(...).Scan(...)` returns `sql.ErrNoRows` when nothing matched — detect with `errors.Is`.",
@@ -342,12 +279,39 @@ export const goDatabaseSql: Lesson = {
             title: "A safe single-row read, start to finish",
             kind: "sequence",
             nodes: [
-              { id: "pool", label: "db (pooled *sql.DB)", detail: "opened once at startup, shared" },
-              { id: "call", label: 'db.QueryRowContext(ctx, "... WHERE id = $1", id)', detail: "SQL text + id as a parameter", tone: "accent" },
-              { id: "conn", label: "pool lends a connection", detail: "borrowed for this call, returned after" },
-              { id: "scan", label: "row.Scan(&acc.ID, &acc.Balance)", detail: "columns copied into your struct" },
-              { id: "norows", label: "sql.ErrNoRows?", detail: "no match → wrap as ErrAccountNotFound", tone: "danger" },
-              { id: "done", label: "return acc, nil", detail: "one row, safely read", tone: "success" },
+              {
+                id: "pool",
+                label: "db (pooled *sql.DB)",
+                detail: "opened once at startup, shared",
+              },
+              {
+                id: "call",
+                label: 'db.QueryRowContext(ctx, "... WHERE id = $1", id)',
+                detail: "SQL text + id as a parameter",
+                tone: "accent",
+              },
+              {
+                id: "conn",
+                label: "pool lends a connection",
+                detail: "borrowed for this call, returned after",
+              },
+              {
+                id: "scan",
+                label: "row.Scan(&acc.ID, &acc.Balance)",
+                detail: "columns copied into your struct",
+              },
+              {
+                id: "norows",
+                label: "sql.ErrNoRows?",
+                detail: "no match → wrap as ErrAccountNotFound",
+                tone: "danger",
+              },
+              {
+                id: "done",
+                label: "return acc, nil",
+                detail: "one row, safely read",
+                tone: "success",
+              },
             ],
             caption:
               "The id travels as data ($1), the connection is borrowed and returned automatically, and 'no match' is a specific detectable error.",
@@ -363,8 +327,7 @@ export const goDatabaseSql: Lesson = {
           example: {
             title: "Open once, query safely, read every row",
             language: "go",
-            code:
-              'package store\n\nimport (\n\t"context"\n\t"database/sql"\n\t"errors"\n\t"fmt"\n\t"time"\n\n\t_ "github.com/jackc/pgx/v5/stdlib"\n)\n\nvar ErrAccountNotFound = errors.New("account not found")\n\ntype Account struct {\n\tID      string\n\tName    string\n\tBalance int64\n}\n\n// Open the POOL once and verify connectivity. Call this at startup, keep the *sql.DB.\nfunc Open(ctx context.Context, dsn string) (*sql.DB, error) {\n\tdb, err := sql.Open("pgx", dsn) // does NOT connect yet\n\tif err != nil {\n\t\treturn nil, fmt.Errorf("opening pool: %w", err)\n\t}\n\tdb.SetMaxOpenConns(25) // bound the pool so we never overwhelm Postgres\n\n\tpingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)\n\tdefer cancel()\n\tif err := db.PingContext(pingCtx); err != nil { // force a real connection now\n\t\treturn nil, fmt.Errorf("connecting to database: %w", err)\n\t}\n\treturn db, nil\n}\n\n// Many rows: Query + loop + defer Close + rows.Err().\nfunc ListAccounts(ctx context.Context, db *sql.DB) ([]Account, error) {\n\trows, err := db.QueryContext(ctx,\n\t\t"SELECT id, name, balance FROM accounts ORDER BY name")\n\tif err != nil {\n\t\treturn nil, fmt.Errorf("listing accounts: %w", err)\n\t}\n\tdefer rows.Close() // return the connection to the pool no matter what\n\n\tvar out []Account\n\tfor rows.Next() {\n\t\tvar a Account\n\t\tif err := rows.Scan(&a.ID, &a.Name, &a.Balance); err != nil {\n\t\t\treturn nil, fmt.Errorf("scanning account: %w", err)\n\t\t}\n\t\tout = append(out, a)\n\t}\n\tif err := rows.Err(); err != nil { // did iteration stop on an error?\n\t\treturn nil, fmt.Errorf("iterating accounts: %w", err)\n\t}\n\treturn out, nil\n}\n\n// One row: QueryRow + Scan, with sql.ErrNoRows mapped to a domain error.\nfunc GetAccount(ctx context.Context, db *sql.DB, id string) (Account, error) {\n\tvar a Account\n\terr := db.QueryRowContext(ctx,\n\t\t"SELECT id, name, balance FROM accounts WHERE id = $1", id, // id is a PARAMETER\n\t).Scan(&a.ID, &a.Name, &a.Balance)\n\tif errors.Is(err, sql.ErrNoRows) {\n\t\treturn Account{}, fmt.Errorf("account %s: %w", id, ErrAccountNotFound)\n\t}\n\tif err != nil {\n\t\treturn Account{}, fmt.Errorf("getting account %s: %w", id, err)\n\t}\n\treturn a, nil\n}\n\n// A write: Exec returns a Result, not rows.\nfunc Rename(ctx context.Context, db *sql.DB, id, name string) error {\n\tres, err := db.ExecContext(ctx,\n\t\t"UPDATE accounts SET name = $1 WHERE id = $2", name, id)\n\tif err != nil {\n\t\treturn fmt.Errorf("renaming account %s: %w", id, err)\n\t}\n\tif n, _ := res.RowsAffected(); n == 0 {\n\t\treturn fmt.Errorf("account %s: %w", id, ErrAccountNotFound)\n\t}\n\treturn nil\n}',
+            code: 'package store\n\nimport (\n\t"context"\n\t"database/sql"\n\t"errors"\n\t"fmt"\n\t"time"\n\n\t_ "github.com/jackc/pgx/v5/stdlib"\n)\n\nvar ErrAccountNotFound = errors.New("account not found")\n\ntype Account struct {\n\tID      string\n\tName    string\n\tBalance int64\n}\n\n// Open the POOL once and verify connectivity. Call this at startup, keep the *sql.DB.\nfunc Open(ctx context.Context, dsn string) (*sql.DB, error) {\n\tdb, err := sql.Open("pgx", dsn) // does NOT connect yet\n\tif err != nil {\n\t\treturn nil, fmt.Errorf("opening pool: %w", err)\n\t}\n\tdb.SetMaxOpenConns(25) // bound the pool so we never overwhelm Postgres\n\n\tpingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)\n\tdefer cancel()\n\tif err := db.PingContext(pingCtx); err != nil { // force a real connection now\n\t\treturn nil, fmt.Errorf("connecting to database: %w", err)\n\t}\n\treturn db, nil\n}\n\n// Many rows: Query + loop + defer Close + rows.Err().\nfunc ListAccounts(ctx context.Context, db *sql.DB) ([]Account, error) {\n\trows, err := db.QueryContext(ctx,\n\t\t"SELECT id, name, balance FROM accounts ORDER BY name")\n\tif err != nil {\n\t\treturn nil, fmt.Errorf("listing accounts: %w", err)\n\t}\n\tdefer rows.Close() // return the connection to the pool no matter what\n\n\tvar out []Account\n\tfor rows.Next() {\n\t\tvar a Account\n\t\tif err := rows.Scan(&a.ID, &a.Name, &a.Balance); err != nil {\n\t\t\treturn nil, fmt.Errorf("scanning account: %w", err)\n\t\t}\n\t\tout = append(out, a)\n\t}\n\tif err := rows.Err(); err != nil { // did iteration stop on an error?\n\t\treturn nil, fmt.Errorf("iterating accounts: %w", err)\n\t}\n\treturn out, nil\n}\n\n// One row: QueryRow + Scan, with sql.ErrNoRows mapped to a domain error.\nfunc GetAccount(ctx context.Context, db *sql.DB, id string) (Account, error) {\n\tvar a Account\n\terr := db.QueryRowContext(ctx,\n\t\t"SELECT id, name, balance FROM accounts WHERE id = $1", id, // id is a PARAMETER\n\t).Scan(&a.ID, &a.Name, &a.Balance)\n\tif errors.Is(err, sql.ErrNoRows) {\n\t\treturn Account{}, fmt.Errorf("account %s: %w", id, ErrAccountNotFound)\n\t}\n\tif err != nil {\n\t\treturn Account{}, fmt.Errorf("getting account %s: %w", id, err)\n\t}\n\treturn a, nil\n}\n\n// A write: Exec returns a Result, not rows.\nfunc Rename(ctx context.Context, db *sql.DB, id, name string) error {\n\tres, err := db.ExecContext(ctx,\n\t\t"UPDATE accounts SET name = $1 WHERE id = $2", name, id)\n\tif err != nil {\n\t\treturn fmt.Errorf("renaming account %s: %w", id, err)\n\t}\n\tif n, _ := res.RowsAffected(); n == 0 {\n\t\treturn fmt.Errorf("account %s: %w", id, ErrAccountNotFound)\n\t}\n\treturn nil\n}',
             takeaway:
               "One pool opened and pinged at startup; every value passed as a placeholder; every read either loops with Close+Err() or maps ErrNoRows to a domain error.",
           },
@@ -380,7 +343,7 @@ export const goDatabaseSql: Lesson = {
       ],
     },
     experiment: {
-      body: "Before reading on, commit to a prediction — a corrected wrong guess sticks better than a right answer you skimmed. Here are two writes with no transaction around them:\n\n`db.ExecContext(ctx, \"INSERT INTO transactions (account_id, amount) VALUES ($1, $2)\", id, amt)`\n`db.ExecContext(ctx, \"UPDATE accounts SET balance = balance + $1 WHERE id = $2\", amt, id)`\n\nThe process crashes (or the request is cancelled) *between* the two calls. Question: what is the state of the database afterward? Decide now, then reveal.\n\nThe answer: the transaction row exists but the balance was never updated — the two are now **out of sync**, and nothing will ever reconcile them. Each `ExecContext` is its own independent, already-committed unit of work; there is no relationship between them, so the first survives and the second simply never happened. This is exactly the situation a database **transaction** exists to prevent. Wrapping both writes in one transaction makes them **atomic**: either both land together on `Commit`, or — if anything goes wrong before `Commit` — both are discarded on `Rollback`, leaving the database exactly as it was. For anything touching money, this is non-negotiable.",
+      body: 'Before reading on, commit to a prediction — a corrected wrong guess sticks better than a right answer you skimmed. Here are two writes with no transaction around them:\n\n`db.ExecContext(ctx, "INSERT INTO transactions (account_id, amount) VALUES ($1, $2)", id, amt)`\n`db.ExecContext(ctx, "UPDATE accounts SET balance = balance + $1 WHERE id = $2", amt, id)`\n\nThe process crashes (or the request is cancelled) *between* the two calls. Question: what is the state of the database afterward? Decide now, then reveal.\n\nThe answer: the transaction row exists but the balance was never updated — the two are now **out of sync**, and nothing will ever reconcile them. Each `ExecContext` is its own independent, already-committed unit of work; there is no relationship between them, so the first survives and the second simply never happened. This is exactly the situation a database **transaction** exists to prevent.\n\nWrapping both writes in one transaction makes them **atomic**: either both land together on `Commit`, or — if anything goes wrong before `Commit` — both are discarded on `Rollback`, leaving the database exactly as it was. For anything touching money, this is non-negotiable.',
     },
     "failure-cases": {
       body: "Almost every database/sql bug is one of a handful of recurring slips. Here are the ones you will actually hit and the signal each gives.",
@@ -402,8 +365,7 @@ export const goDatabaseSql: Lesson = {
           example: {
             title: "NULL needs a nullable target",
             language: "go",
-            code:
-              '// memo column is nullable; this row has memo = NULL.\nvar memo string\nerr := db.QueryRowContext(ctx, "SELECT memo FROM txns WHERE id = $1", id).Scan(&memo)\n// runtime error: sql: Scan error ... converting NULL to string is unsupported\n\n// Fix: scan into a type that can represent NULL.\nvar memo sql.NullString\n_ = db.QueryRowContext(ctx, "SELECT memo FROM txns WHERE id = $1", id).Scan(&memo)\nif memo.Valid {\n    fmt.Println("memo:", memo.String) // present\n} else {\n    fmt.Println("no memo") // it was NULL\n}',
+            code: '// memo column is nullable; this row has memo = NULL.\nvar memo string\nerr := db.QueryRowContext(ctx, "SELECT memo FROM txns WHERE id = $1", id).Scan(&memo)\n// runtime error: sql: Scan error ... converting NULL to string is unsupported\n\n// Fix: scan into a type that can represent NULL.\nvar memo sql.NullString\n_ = db.QueryRowContext(ctx, "SELECT memo FROM txns WHERE id = $1", id).Scan(&memo)\nif memo.Valid {\n    fmt.Println("memo:", memo.String) // present\n} else {\n    fmt.Println("no memo") // it was NULL\n}',
             takeaway:
               "A SQL NULL has no plain value. Scan it into sql.NullString (check .Valid) or a *string that becomes nil.",
           },
@@ -426,7 +388,7 @@ export const goDatabaseSql: Lesson = {
       ],
     },
     design: {
-      body: "Turn the rules into a habit that scales across a service. Open exactly one `*sql.DB` at startup, verify it with `PingContext`, bound it with `SetMaxOpenConns`, and pass it into a thin storage layer — never reach for a global or reopen per request. Inside that layer, every method takes a `context.Context` and uses the Context call variants, every user value is a placeholder, and every method that changes more than one row does so inside a transaction. Map `sql.ErrNoRows` to a domain 'not found' error at the storage boundary so the layers above decide on a 404 without knowing SQL exists. That discipline — one pool, Context everywhere, placeholders always, transactions for multi-write invariants — keeps persistence both safe and predictable as the code grows.",
+      body: "Turn the rules into a habit that scales across a service. Open exactly one `*sql.DB` at startup, verify it with `PingContext`, bound it with `SetMaxOpenConns`, and pass it into a thin storage layer — never reach for a global or reopen per request.\n\nInside that layer, every method takes a `context.Context` and uses the Context call variants, every user value is a placeholder, and every method that changes more than one row does so inside a transaction. Map `sql.ErrNoRows` to a domain 'not found' error at the storage boundary so the layers above decide on a 404 without knowing SQL exists.\n\nThat discipline — one pool, Context everywhere, placeholders always, transactions for multi-write invariants — keeps persistence both safe and predictable as the code grows.",
       blocks: [
         {
           type: "points",
@@ -447,33 +409,6 @@ export const goDatabaseSql: Lesson = {
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "Here is the lesson applied to LedgerFlow, and it is the exact reason this lesson unlocks persistence. Recording a transaction touches *two* rows that must agree: a new row in `transactions`, and the account's running `balance`. If only one lands, the ledger is corrupt. So the store wraps both writes in a single transaction using the canonical Go pattern: `BeginTx`, an immediate `defer tx.Rollback()` as a safety net, both writes with `tx.ExecContext` and `$1/$2` placeholders, and a final `tx.Commit()`. The defer is the key idea — `Rollback` after a successful `Commit` is a harmless no-op, so on the happy path it does nothing, but on *any* error path (an early `return`, a scan failure, a cancelled Context) it guarantees the half-finished transaction is discarded and no changes leak. One `*sql.DB` pool, opened at startup, serves every request.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Recording a LedgerFlow transaction atomically",
-            language: "go",
-            code:
-              'func (s *Store) RecordTransaction(ctx context.Context, accountID string, amount int64) error {\n\ttx, err := s.db.BeginTx(ctx, nil) // nil = default isolation\n\tif err != nil {\n\t\treturn fmt.Errorf("begin: %w", err)\n\t}\n\tdefer tx.Rollback() // safety net: no-op after Commit, undo on any early return\n\n\t// Write 1: the transaction row.\n\tif _, err := tx.ExecContext(ctx,\n\t\t"INSERT INTO transactions (account_id, amount) VALUES ($1, $2)",\n\t\taccountID, amount,\n\t); err != nil {\n\t\treturn fmt.Errorf("inserting transaction: %w", err)\n\t}\n\n\t// Write 2: recalculate the running balance.\n\tif _, err := tx.ExecContext(ctx,\n\t\t"UPDATE accounts SET balance = balance + $1 WHERE id = $2",\n\t\tamount, accountID,\n\t); err != nil {\n\t\treturn fmt.Errorf("updating balance: %w", err)\n\t}\n\n\t// Both writes succeeded — make them permanent, together.\n\tif err := tx.Commit(); err != nil {\n\t\treturn fmt.Errorf("commit: %w", err)\n\t}\n\treturn nil\n}',
-            takeaway:
-              "BeginTx + defer tx.Rollback() + tx.Commit() makes the insert and the balance update atomic: both land, or neither does. The deferred Rollback covers every error path automatically.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "The insert and the balance update are one atomic unit — a crash between them can never desync the ledger.",
-            "`defer tx.Rollback()` right after `BeginTx` guarantees no dangling transaction on any error path; it's a no-op once `Commit` succeeds.",
-            "Both writes use `tx.ExecContext` with placeholders, so hostile input can never alter the SQL.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize QueryRowContext' into 'I can open a pool, read safely, and transact without looking it up'. Work across prediction, code-reading, implementation, debugging, refactoring, and an advanced task — each produces a different kind of evidence, so clearing one doesn't cover the rest.",
     },
     mastery: {
       body: "You've mastered this lesson when you can do four things without notes: explain why `*sql.DB` is a pool and why `sql.Open` doesn't connect; look at a query and say whether it's injectable and how to parameterize it; write a Context-aware, parameterized transaction with `BeginTx`, `defer tx.Rollback()`, and `Commit`; and design where the pool and transactions live in a service. Check a criterion only when you genuinely have that evidence — reading the lesson doesn't count.",
