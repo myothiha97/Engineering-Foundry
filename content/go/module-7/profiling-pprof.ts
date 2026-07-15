@@ -25,11 +25,6 @@ export const goProfilingPprof: Lesson = {
     "Run the disciplined loop (benchmark, profile, fix the top hotspot, re-benchmark to confirm) and use `-race` to catch data races that execute in tests or CI",
   ],
   concepts: ["pprof", "cpu-profile", "heap-profile", "race-detector"],
-  ledgerFlowApplications: [
-    "Profile the ledger's hot posting path under load to see where the CPU time and allocations actually go",
-    "Find an allocation hotspot in a heap profile (a string built in a loop) and fix it with strings.Builder",
-    "Confirm the fix with a benchmark that shows fewer allocations and less time per operation",
-  ],
   references: [
     {
       title: "Diagnostics",
@@ -38,7 +33,7 @@ export const goProfilingPprof: Lesson = {
         "The full menu of Go diagnostics — profiling, tracing, and debugging — and where pprof and the race detector fit among them.",
       relevance:
         "The official map of the tools this lesson uses, so you know pprof is one option among several and when to reach for it.",
-      required: true,
+      required: false,
       section: "Profiling",
     },
     {
@@ -48,7 +43,7 @@ export const goProfilingPprof: Lesson = {
         "A worked walk-through: capture a CPU profile, open it in `go tool pprof`, read `top` and `list`, find the hotspot, and speed the program up.",
       relevance:
         "The canonical end-to-end example of the measure-then-optimize loop this lesson teaches.",
-      required: true,
+      required: false,
       section: "The loop",
     },
     {
@@ -68,7 +63,7 @@ export const goProfilingPprof: Lesson = {
         "What the race detector does, how to enable it with `-race`, its runtime cost, and the important limit that it only reports races that actually execute.",
       relevance:
         "The authoritative source for the race-detector half of this lesson and its correctness caveats.",
-      required: true,
+      required: false,
       section: "Race detector",
     },
   ],
@@ -105,7 +100,7 @@ export const goProfilingPprof: Lesson = {
       starterCode:
         "# 1. run the benchmark and write both profiles\n# 2. open the CPU profile\n# 3. inside pprof, list the top self-time functions",
       expectedAnswer:
-        '# capture both profiles from the benchmark\ngo test -run=^$ -bench=BenchmarkPostBatch -benchmem \\\n  -cpuprofile=cpu.out -memprofile=mem.out .\n\n# open the CPU profile interactively\ngo tool pprof cpu.out\n\n# at the (pprof) prompt:\n(pprof) top      # top functions by flat (self) time\n(pprof) top -cum # or sort by cumulative time\n(pprof) list ledger.PostBatch  # annotated source for one function\n\n# open the memory profile the same way; -alloc_space shows total bytes allocated\ngo tool pprof -alloc_space mem.out',
+        "# capture both profiles from the benchmark\ngo test -run=^$ -bench=BenchmarkPostBatch -benchmem \\\n  -cpuprofile=cpu.out -memprofile=mem.out .\n\n# open the CPU profile interactively\ngo tool pprof cpu.out\n\n# at the (pprof) prompt:\n(pprof) top      # top functions by flat (self) time\n(pprof) top -cum # or sort by cumulative time\n(pprof) list ledger.PostBatch  # annotated source for one function\n\n# open the memory profile the same way; -alloc_space shows total bytes allocated\ngo tool pprof -alloc_space mem.out",
       hints: [
         "`-cpuprofile` and `-memprofile` are flags to `go test`; add `-benchmem` so the bench line also shows allocs.",
         "`-run=^$` disables normal tests so only the benchmark runs; then `go tool pprof <file>` opens the interactive prompt where `top` and `list` live.",
@@ -119,7 +114,7 @@ export const goProfilingPprof: Lesson = {
       starterCode:
         'func formatLine(entries []Entry) string {\n    out := ""\n    for _, e := range entries {\n        out += e.Account + ": " + e.Amount.String() + "\\n"\n    }\n    return out\n}',
       expectedAnswer:
-        'func formatLine(entries []Entry) string {\n    var b strings.Builder\n    for _, e := range entries {\n        b.WriteString(e.Account)\n        b.WriteString(": ")\n        b.WriteString(e.Amount.String())\n        b.WriteByte(\'\\n\')\n    }\n    return b.String()\n}',
+        "func formatLine(entries []Entry) string {\n    var b strings.Builder\n    for _, e := range entries {\n        b.WriteString(e.Account)\n        b.WriteString(\": \")\n        b.WriteString(e.Amount.String())\n        b.WriteByte('\\n')\n    }\n    return b.String()\n}",
       hints: [
         "`out += ...` in a loop allocates a brand-new backing string on every iteration because strings are immutable — that is O(n^2) allocations.",
         "strings.Builder appends into one growing buffer and allocates once at the end; verify with a benchmark showing allocs/op drop.",
@@ -182,7 +177,7 @@ export const goProfilingPprof: Lesson = {
       kind: "debug",
       description:
         "Given a profile, locate an allocation or CPU hotspot, fix it, and confirm the improvement with a re-run benchmark.",
-      required: true,
+      required: false,
     },
     {
       id: "design-profiling-plan",
@@ -214,67 +209,8 @@ export const goProfilingPprof: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The naive approach to making code faster is to read it and optimize whatever looks expensive to a human — a nested loop, a function with a scary name, the database call you already feel guilty about. You spend an afternoon rewriting it, and the benchmark barely moves. Meanwhile the real culprit was a one-line string concatenation you never suspected.\n\nThis fails because human intuition about performance is unreliable. The slow part is rarely the part that looks slow; it's often something small that runs a million times. Optimizing without a profile is guessing, and guessing wastes the most expensive resource you have — your attention — on code that wasn't the problem.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "The tempting guess",
-            language: "go",
-            code:
-              '// "This loop over entries must be the slow part, let me micro-optimize it..."\nfor i := 0; i < len(entries); i++ {\n    process(entries[i]) // spend hours tuning this\n}\n\n// ...while the real hotspot was one innocent line elsewhere:\nmsg := prefix + acct + ": " + amount + "\\n" // allocates on every call, called millions of times',
-            takeaway:
-              "The eye is drawn to the loop, but the profiler points at the string build. Without measuring, you optimize the wrong thing.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Optimizing by eye targets what *looks* slow, not what *is* slow.",
-            "The real hotspot is often small code on a hot path, not the scary-looking block.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "Here's how guessing fails in practice, and why it's so seductive. You rewrite the part you suspected, the benchmark improves by 2% (noise, really), and you convince yourself it worked. You ship it. The API is still slow. You've spent real effort and moved nothing, because the 2% you touched was never where the time lived.\n\nThe rule to burn in: **don't optimize without a profile, and when you have one, optimize the biggest hotspot first.** This is Amdahl's law in plain terms — speeding up something that's 5% of the runtime can *at most* make the program 5% faster, even if you make that part infinitely fast. The 60%-of-runtime function at the top of the profile is where the wins are.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "A week spent optimizing 3% of the runtime",
-            context:
-              "An engineer is sure the JSON encoding in the posting path is the bottleneck. They spend a week replacing it with a hand-tuned encoder. The benchmark improves by 3%. The endpoint is still slow, and users still complain.",
-            insight:
-              "A profile would have shown in 30 seconds that JSON encoding was 3% of the time and a string built in a loop was 60%. Amdahl's law: optimizing the 3% part caps your gain at 3%. Always profile first, then attack the top of the list.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental image for how a profiler works — and it's important because it explains why profiles are *estimates*, not exact counts. Imagine a supervisor who walks the factory floor and, roughly a hundred times a second, snaps a photo of what every worker is doing right now. After a minute they have thousands of photos. To find the busiest station, they don't need to have watched every second — they just count photos: the station that appears in 60% of the snapshots is where 60% of the work happens.\n\nThat's a **CPU profile**. The Go runtime interrupts your program about 100 times per second and records the current call stack — a sample. Stack up thousands of samples and the functions that appear most often are your hotspots. Because it's sampling, the numbers wobble slightly run to run and tiny functions may flicker in and out — but the big hotspots are rock-solid, and those are the only ones you act on.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "Sampled means statistical, not wrong",
-            text: "A CPU profile doesn't count every instruction — it samples ~100 times a second. So exact percentages vary a little between runs and small entries near the bottom are noisy. Trust the top of the list, not the third decimal place. Sampling is what makes profiling cheap enough to run on real workloads.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "A profile is built from periodic **samples** of the call stack, not an exact count.",
-            "Functions that appear in the most samples are the biggest consumers.",
-            "The top of the list is stable and trustworthy; the bottom is statistical noise.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "Hold two distinct pictures in your head, because pprof captures two different resources and confusing them sends you optimizing the wrong thing.\n\nA **CPU profile** answers *where is time spent?* — it samples the running stack and shows which functions burn the most CPU. A **memory (heap) profile** answers *where do allocations come from?* — it records where your program asks for memory. These are different questions: a function can be a CPU hotspot without allocating, or an allocation hotspot without using much CPU directly (though heavy allocation usually *shows up* in the CPU profile as time spent in `runtime.mallocgc` and garbage collection). The model: **CPU profile for time, heap profile for memory — and heavy allocation quietly costs CPU too, which is why fixing an allocation hotspot often speeds the whole thing up.**",
+      body: "Hold two distinct pictures in your head, because pprof captures two different resources and confusing them sends you optimizing the wrong thing.\n\nA **CPU profile** answers *where is time spent? * — it samples the running stack and shows which functions burn the most CPU. A **memory (heap) profile** answers *where do allocations come from? * — it records where your program asks for memory.\n\nThese are different questions: a function can be a CPU hotspot without allocating, or an allocation hotspot without using much CPU directly (though heavy allocation usually *shows up* in the CPU profile as time spent in `runtime.mallocgc` and garbage collection). The model: **CPU profile for time, heap profile for memory — and heavy allocation quietly costs CPU too, which is why fixing an allocation hotspot often speeds the whole thing up. **",
       blocks: [
         {
           type: "diagram",
@@ -285,17 +221,20 @@ export const goProfilingPprof: Lesson = {
               {
                 id: "cpu",
                 label: "CPU profile",
-                detail: "Sampled ~100x/sec. Answers 'where is time spent?'. Read with `top` sorted by flat (self) time. Captured with -cpuprofile.",
+                detail:
+                  "Sampled ~100x/sec. Answers 'where is time spent?'. Read with `top` sorted by flat (self) time. Captured with -cpuprofile.",
                 tone: "accent",
               },
               {
                 id: "heap",
                 label: "Heap / memory profile",
-                detail: "Sampled allocations. Answers 'where does memory come from?'. -alloc_space = total allocated; -inuse_space = still live. Captured with -memprofile.",
+                detail:
+                  "Sampled allocations. Answers 'where does memory come from?'. -alloc_space = total allocated; -inuse_space = still live. Captured with -memprofile.",
                 tone: "success",
               },
             ],
-            caption: "Different questions, different profiles — but allocation churn also shows up as CPU time in mallocgc and GC.",
+            caption:
+              "Different questions, different profiles — but allocation churn also shows up as CPU time in mallocgc and GC.",
           },
         },
         {
@@ -309,15 +248,14 @@ export const goProfilingPprof: Lesson = {
       ],
     },
     mechanics: {
-      body: "Now the concrete commands. There are two ways to capture a profile.\n\n**From a benchmark** — the repeatable way. Add flags to `go test`: `-cpuprofile=cpu.out` and `-memprofile=mem.out` write the profiles, and `-bench` selects which benchmark to drive. This is ideal because a benchmark isolates one path and runs it many times.\n\n**From a running server** — the live way. Add a blank import `import _ \"net/http/pprof\"` and the package registers profiling handlers under `/debug/pprof/` on your HTTP server. Then hit `/debug/pprof/profile` (a 30-second CPU profile) or `/debug/pprof/heap` while the server is under real load. Use this when the slowness only appears in production-like conditions.\n\nEither way you get a profile *file*, which you open with `go tool pprof <file>`. That drops you into an interactive prompt.",
+      body: 'Now the concrete commands. There are two ways to capture a profile.\n\n**From a benchmark** — the repeatable way. Add flags to `go test`: `-cpuprofile=cpu.out` and `-memprofile=mem.out` write the profiles, and `-bench` selects which benchmark to drive. This is ideal because a benchmark isolates one path and runs it many times.\n\n**From a running server** — the live way. Add a blank import `import _ "net/http/pprof"` and the package registers profiling handlers under `/debug/pprof/` on your HTTP server. Then hit `/debug/pprof/profile` (a 30-second CPU profile) or `/debug/pprof/heap` while the server is under real load. Use this when the slowness only appears in production-like conditions.\n\nEither way you get a profile *file*, which you open with `go tool pprof <file>`. That drops you into an interactive prompt.',
       blocks: [
         {
           type: "example",
           example: {
             title: "Capture from a benchmark",
             language: "bash",
-            code:
-              "# run one benchmark, write a CPU profile and a memory profile\ngo test -run=^$ -bench=BenchmarkPostBatch -benchmem \\\n  -cpuprofile=cpu.out -memprofile=mem.out .\n\n# -run=^$   disables normal tests (run only the benchmark)\n# -benchmem also prints allocs/op on the bench line\n# -cpuprofile / -memprofile write the profile files",
+            code: "# run one benchmark, write a CPU profile and a memory profile\ngo test -run=^$ -bench=BenchmarkPostBatch -benchmem \\\n  -cpuprofile=cpu.out -memprofile=mem.out .\n\n# -run=^$   disables normal tests (run only the benchmark)\n# -benchmem also prints allocs/op on the bench line\n# -cpuprofile / -memprofile write the profile files",
             takeaway:
               "One `go test` command produces both profile files. This is the repeatable capture you'll use most while optimizing.",
           },
@@ -327,8 +265,7 @@ export const goProfilingPprof: Lesson = {
           example: {
             title: "Capture from a live server",
             language: "go",
-            code:
-              'import (\n    "net/http"\n    _ "net/http/pprof" // blank import registers /debug/pprof/ handlers\n)\n\nfunc main() {\n    // your real server; pprof handlers are now on the default mux\n    go http.ListenAndServe("localhost:6060", nil)\n    runServer()\n}\n\n// then, while it is under load:\n//   go tool pprof http://localhost:6060/debug/pprof/profile   (30s CPU profile)\n//   go tool pprof http://localhost:6060/debug/pprof/heap      (heap profile)',
+            code: 'import (\n    "net/http"\n    _ "net/http/pprof" // blank import registers /debug/pprof/ handlers\n)\n\nfunc main() {\n    // your real server; pprof handlers are now on the default mux\n    go http.ListenAndServe("localhost:6060", nil)\n    runServer()\n}\n\n// then, while it is under load:\n//   go tool pprof http://localhost:6060/debug/pprof/profile   (30s CPU profile)\n//   go tool pprof http://localhost:6060/debug/pprof/heap      (heap profile)',
             takeaway:
               "A single blank import exposes profiling over HTTP. Use it to profile a real, loaded server when a benchmark can't reproduce the problem. Never expose /debug/pprof/ on a public port.",
           },
@@ -337,7 +274,7 @@ export const goProfilingPprof: Lesson = {
           type: "points",
           items: [
             "Benchmark capture: `-cpuprofile` / `-memprofile` flags on `go test` — repeatable, isolates one path.",
-            "Live capture: `import _ \"net/http/pprof\"` exposes `/debug/pprof/` — for real load you can't reproduce.",
+            'Live capture: `import _ "net/http/pprof"` exposes `/debug/pprof/` — for real load you can\'t reproduce.',
             "Both produce a file (or URL) you open with `go tool pprof`.",
           ],
         },
@@ -352,13 +289,36 @@ export const goProfilingPprof: Lesson = {
             title: "Reading a profile with `go tool pprof`",
             kind: "sequence",
             nodes: [
-              { id: "open", label: "go tool pprof cpu.out", detail: "opens the interactive (pprof) prompt" },
-              { id: "top", label: "(pprof) top", detail: "ranked list; sort by flat (self time) to find the hotspot", tone: "accent" },
-              { id: "list", label: "(pprof) list formatLine", detail: "annotated source, time attributed line by line", tone: "success" },
-              { id: "web", label: "(pprof) web", detail: "flame graph in the browser (needs graphviz); box width = time" },
-              { id: "act", label: "fix the top hotspot", detail: "change the one function with the most self-time" },
+              {
+                id: "open",
+                label: "go tool pprof cpu.out",
+                detail: "opens the interactive (pprof) prompt",
+              },
+              {
+                id: "top",
+                label: "(pprof) top",
+                detail: "ranked list; sort by flat (self time) to find the hotspot",
+                tone: "accent",
+              },
+              {
+                id: "list",
+                label: "(pprof) list formatLine",
+                detail: "annotated source, time attributed line by line",
+                tone: "success",
+              },
+              {
+                id: "web",
+                label: "(pprof) web",
+                detail: "flame graph in the browser (needs graphviz); box width = time",
+              },
+              {
+                id: "act",
+                label: "fix the top hotspot",
+                detail: "change the one function with the most self-time",
+              },
             ],
-            caption: "top to find it, list to see the exact lines, web for the visual — then change the biggest thing.",
+            caption:
+              "top to find it, list to see the exact lines, web for the visual — then change the biggest thing.",
           },
         },
         {
@@ -379,8 +339,7 @@ export const goProfilingPprof: Lesson = {
           example: {
             title: "The fix: string concat in a loop -> strings.Builder",
             language: "go",
-            code:
-              '// BEFORE: heap profile shows this line dominates allocations.\n// Each += builds a brand-new string (strings are immutable) -> O(n^2) allocs.\nfunc formatLine(entries []Entry) string {\n    out := ""\n    for _, e := range entries {\n        out += e.Account + ": " + e.Amount.String() + "\\n"\n    }\n    return out\n}\n\n// AFTER: one growing buffer, one allocation at the end.\nfunc formatLine(entries []Entry) string {\n    var b strings.Builder\n    for _, e := range entries {\n        b.WriteString(e.Account)\n        b.WriteString(": ")\n        b.WriteString(e.Amount.String())\n        b.WriteByte(\'\\n\')\n    }\n    return b.String()\n}',
+            code: '// BEFORE: heap profile shows this line dominates allocations.\n// Each += builds a brand-new string (strings are immutable) -> O(n^2) allocs.\nfunc formatLine(entries []Entry) string {\n    out := ""\n    for _, e := range entries {\n        out += e.Account + ": " + e.Amount.String() + "\\n"\n    }\n    return out\n}\n\n// AFTER: one growing buffer, one allocation at the end.\nfunc formatLine(entries []Entry) string {\n    var b strings.Builder\n    for _, e := range entries {\n        b.WriteString(e.Account)\n        b.WriteString(": ")\n        b.WriteString(e.Amount.String())\n        b.WriteByte(\'\\n\')\n    }\n    return b.String()\n}',
             takeaway:
               "The profile named the function; the fix is a standard pattern. strings.Builder turns O(n^2) allocations into roughly one.",
           },
@@ -390,8 +349,7 @@ export const goProfilingPprof: Lesson = {
           example: {
             title: "Confirm with a re-run benchmark",
             language: "bash",
-            code:
-              "# before\nBenchmarkPostBatch-8   3000   485210 ns/op   204800 B/op   1024 allocs/op\n\n# after switching to strings.Builder\nBenchmarkPostBatch-8   9000   132540 ns/op    16384 B/op      3 allocs/op\n\n# allocs/op dropped from 1024 to 3, B/op and ns/op fell too -> the fix is real",
+            code: "# before\nBenchmarkPostBatch-8   3000   485210 ns/op   204800 B/op   1024 allocs/op\n\n# after switching to strings.Builder\nBenchmarkPostBatch-8   9000   132540 ns/op    16384 B/op      3 allocs/op\n\n# allocs/op dropped from 1024 to 3, B/op and ns/op fell too -> the fix is real",
             takeaway:
               "The re-run benchmark proves it: allocs/op collapsed and time per op fell. Without this step you'd only be guessing the change helped.",
           },
@@ -407,7 +365,7 @@ export const goProfilingPprof: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before reading on — a wrong guess you correct sticks better than a right answer you skimmed. You profile a function and `top` shows 45% of self-time inside `runtime.mallocgc` and `runtime.gcBgMarkWorker`, with your own functions spread thin below. Your teammate says \"the CPU profile is useless, none of *our* code is the hotspot — there's nothing to optimize.\" Are they right? Commit to an answer.\n\nThey're wrong, and this is the insight that makes the two profiles click together. Time in `mallocgc` and the GC workers is the CPU *cost of allocating*. The CPU profile is telling you the program's bottleneck is allocation pressure — it just can't tell you *which* of your functions is doing the allocating. So you switch tools: open the heap profile with `-alloc_space`, find the function allocating the most, and fix it (often the same `strings.Builder` move). When you re-profile, the `mallocgc`/GC time shrinks because there's less to allocate and collect. One profile diagnosed the *kind* of problem; the other located it. That hand-off — CPU says 'allocation', heap says 'here' — is the core skill of this lesson.",
+      body: "Predict before reading on — a wrong guess you correct sticks better than a right answer you skimmed. You profile a function and `top` shows 45% of self-time inside `runtime.mallocgc` and `runtime.gcBgMarkWorker`, with your own functions spread thin below. Your teammate says \"the CPU profile is useless, none of *our* code is the hotspot — there's nothing to optimize.\" Are they right? Commit to an answer.\n\nThey're wrong, and this is the insight that makes the two profiles click together. Time in `mallocgc` and the GC workers is the CPU *cost of allocating*. The CPU profile is telling you the program's bottleneck is allocation pressure — it just can't tell you *which* of your functions is doing the allocating.\n\nSo you switch tools: open the heap profile with `-alloc_space`, find the function allocating the most, and fix it (often the same `strings.Builder` move). When you re-profile, the `mallocgc`/GC time shrinks because there's less to allocate and collect. One profile diagnosed the *kind* of problem; the other located it. That hand-off — CPU says 'allocation', heap says 'here' — is the core skill of this lesson.",
     },
     "failure-cases": {
       body: "The failures here cluster around two mistakes: acting on a profile you misread, and trusting concurrency code you never checked with `-race`. Here are the ones you'll actually meet.",
@@ -428,8 +386,7 @@ export const goProfilingPprof: Lesson = {
           example: {
             title: "A data race the detector catches — and its limit",
             language: "go",
-            code:
-              '// Two goroutines write the same counter with no synchronization.\nfunc raceyCount() int {\n    n := 0\n    var wg sync.WaitGroup\n    for i := 0; i < 2; i++ {\n        wg.Add(1)\n        go func() { defer wg.Done(); n++ }() // read-modify-write on shared n\n    }\n    wg.Wait()\n    return n\n}\n\n// go test -race ./...  ->  WARNING: DATA RACE, with both goroutines\' stacks.\n// But -race only reports it if this code RUNS during the test. A path\n// your tests never exercise is a race the detector never sees.',
+            code: "// Two goroutines write the same counter with no synchronization.\nfunc raceyCount() int {\n    n := 0\n    var wg sync.WaitGroup\n    for i := 0; i < 2; i++ {\n        wg.Add(1)\n        go func() { defer wg.Done(); n++ }() // read-modify-write on shared n\n    }\n    wg.Wait()\n    return n\n}\n\n// go test -race ./...  ->  WARNING: DATA RACE, with both goroutines' stacks.\n// But -race only reports it if this code RUNS during the test. A path\n// your tests never exercise is a race the detector never sees.",
             takeaway:
               "`-race` has no false positives — a report is a real race — but it only finds races that execute. Run your whole suite under it so more paths are covered.",
           },
@@ -451,7 +408,7 @@ export const goProfilingPprof: Lesson = {
       ],
     },
     design: {
-      body: "A few durable rules for using these tools well. Never optimize without a profile — measure first, always. When you have a profile, spend your effort on the single biggest hotspot, because Amdahl's law caps what fixing anything smaller can buy you. Reproduce the hot path in a benchmark when you can (repeatable, isolated); reach for the live server endpoint only when the problem won't show up any other way. And treat the race detector as a standing part of CI, not a thing you run once — its value is proportional to how many code paths execute under it.",
+      body: "A few durable rules for using these tools well. Never optimize without a profile — measure first, always. When you have a profile, spend your effort on the single biggest hotspot, because Amdahl's law caps what fixing anything smaller can buy you. Reproduce the hot path in a benchmark when you can (repeatable, isolated); reach for the live server endpoint only when the problem won't show up any other way.\n\nAnd treat the race detector as a standing part of CI, not a thing you run once — its value is proportional to how many code paths execute under it.",
       blocks: [
         {
           type: "points",
@@ -474,34 +431,11 @@ export const goProfilingPprof: Lesson = {
         },
       ],
     },
-    ledgerflow: {
-      body: "This is exactly the loop LedgerFlow uses to keep its hot posting path fast. Under load, `PostBatch` felt slow, so instead of guessing, the team captured a CPU profile from `BenchmarkPostBatch`. `top` showed a suspicious 20% in `runtime.mallocgc` — a signal of allocation pressure — so they pulled the heap profile with `-alloc_space` and found the culprit: `formatLine` was building the posting output with `out += ...` inside a loop, allocating a new string every iteration. They rewrote it with `strings.Builder`, then re-ran the benchmark to confirm: `allocs/op` fell from over a thousand to a handful and `ns/op` dropped sharply. The fix was validated by measurement, not hope. Separately, because posting runs across goroutines, the team runs `go test -race ./...` in CI so any data race on the shared ledger state is caught before it can corrupt a balance in production.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: the profile-driven optimization loop",
-            kind: "sequence",
-            nodes: [
-              { id: "bench", label: "BenchmarkPostBatch is slow", detail: "measured, not guessed", tone: "accent" },
-              { id: "cpu", label: "CPU profile: 20% in mallocgc", detail: "signal of allocation pressure" },
-              { id: "heap", label: "Heap profile (-alloc_space)", detail: "points at formatLine's string concat", tone: "danger" },
-              { id: "fix", label: "Rewrite with strings.Builder", detail: "one buffer instead of O(n^2) allocs" },
-              { id: "confirm", label: "Re-benchmark: allocs/op collapses", detail: "the fix is proven, then ship", tone: "success" },
-            ],
-            caption: "Measure, locate, fix, confirm — the ledger's speed comes from the loop, not from clever guesses.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about pprof\" into \"I reach for a profile before I touch a line.\" Work across predicting why a sampled profile wobbles, reading a real `top` listing, capturing both profiles from a benchmark, debugging an allocation hotspot into a strings.Builder fix, designing a profiling plan for an unknown slowdown, and wiring `-race` into CI. Each produces a different kind of evidence — do them, don't just read them.",
-    },
     mastery: {
       body: "You've mastered this when you can explain why profiles are sampled (and what `flat` vs `cum` and `-alloc_space` vs `-inuse_space` mean), capture a CPU and memory profile from a benchmark and read them with `go tool pprof`, locate a hotspot and fix it and confirm the win with a re-run benchmark, and decide what to profile and how for an unknown problem — plus run `-race` where it counts. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Two ideas carry this capstone. **Measure, then optimize the top of `top`** — a benchmark tells you how much time, a pprof profile tells you where it goes, and the disciplined loop is benchmark -> profile -> fix the biggest hotspot -> re-benchmark to confirm. Profiles are sampled, so trust the big entries and ignore the noise, and never optimize without one. **And check your concurrency with `-race`** — the detector instruments memory accesses to report real data races with stacks, at the cost of speed and memory, and it only catches races that actually execute — so run it across your whole test suite in CI.",
+      body: "Two ideas carry this capstone. **Measure, then optimize the top of `top`** — a benchmark tells you how much time, a pprof profile tells you where it goes, and the disciplined loop is benchmark -> profile -> fix the biggest hotspot -> re-benchmark to confirm. Profiles are sampled, so trust the big entries and ignore the noise, and never optimize without one.\n\n**And check your concurrency with `-race`** — the detector instruments memory accesses to report real data races with stacks, at the cost of speed and memory, and it only catches races that actually execute — so run it across your whole test suite in CI.",
       blocks: [
         {
           type: "points",

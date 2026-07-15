@@ -25,41 +25,43 @@ export const goVetCoverage: Lesson = {
     "Adopt `golangci-lint` with a curated config and compose vet, lint, formatting, and coverage into a single local check and a CI merge gate",
   ],
   concepts: ["coverage", "go-vet", "static-analysis", "linting"],
-  ledgerFlowApplications: [
-    "Run `go vet` on every push so a mismatched `Printf` verb in a ledger log line is caught before review",
-    "Gate merges to main on `go vet` + `golangci-lint` passing with zero issues",
-    "Require a coverage threshold on the money-handling packages so untested balance logic can't slip in",
-  ],
   references: [
     {
       title: "go vet — command documentation",
       url: "https://pkg.go.dev/cmd/vet",
-      teaches: "What `go vet` reports, the individual analyzers it runs, and how `go test` runs a subset of vet automatically.",
-      relevance: "The authoritative list of what vet catches, which this lesson introduces one class at a time.",
-      required: true,
+      teaches:
+        "What `go vet` reports, the individual analyzers it runs, and how `go test` runs a subset of vet automatically.",
+      relevance:
+        "The authoritative list of what vet catches, which this lesson introduces one class at a time.",
+      required: false,
       section: "go vet",
     },
     {
       title: "The cover story — the Go Blog",
       url: "https://go.dev/blog/cover",
-      teaches: "How Go's coverage tool works, how to produce a profile, and how to view it as HTML or per-function output.",
-      relevance: "Grounds the coverage half of the lesson in the original explanation of `go test -cover` and `go tool cover`.",
-      required: true,
+      teaches:
+        "How Go's coverage tool works, how to produce a profile, and how to view it as HTML or per-function output.",
+      relevance:
+        "Grounds the coverage half of the lesson in the original explanation of `go test -cover` and `go tool cover`.",
+      required: false,
       section: "Coverage",
     },
     {
       title: "golangci-lint",
       url: "https://github.com/golangci/golangci-lint",
-      teaches: "How the aggregator runs many linters at once, how it is configured via `.golangci.yml`, and which linters are enabled by default.",
+      teaches:
+        "How the aggregator runs many linters at once, how it is configured via `.golangci.yml`, and which linters are enabled by default.",
       relevance: "The tool this lesson recommends for the lint layer of a real CI gate.",
-      required: true,
+      required: false,
       section: "Linting",
     },
     {
       title: "Staticcheck",
       url: "https://staticcheck.dev",
-      teaches: "The set of high-signal static analysis checks that staticcheck adds beyond vet, and why they matter.",
-      relevance: "The standout linter inside golangci-lint; explains the depth of analysis available for free.",
+      teaches:
+        "The set of high-signal static analysis checks that staticcheck adds beyond vet, and why they matter.",
+      relevance:
+        "The standout linter inside golangci-lint; explains the depth of analysis available for free.",
       required: false,
       section: "Linting",
     },
@@ -69,7 +71,7 @@ export const goVetCoverage: Lesson = {
       id: "go7vc-predict-vet-on-test",
       type: "prediction",
       prompt:
-        "You run `go test ./...` with no explicit vet step, and your code has a `fmt.Printf(\"%d\", name)` where `name` is a string. Predict what happens before any of your test assertions run, and why.",
+        'You run `go test ./...` with no explicit vet step, and your code has a `fmt.Printf("%d", name)` where `name` is a string. Predict what happens before any of your test assertions run, and why.',
       expectedAnswer:
         "The build/test run reports a vet error like `fmt.Printf format %d has arg name of wrong type string`, because `go test` runs a subset of `go vet` automatically before executing tests. The Printf-format check is in that subset, so it fires even though you never called vet yourself.",
       hints: [
@@ -81,7 +83,7 @@ export const goVetCoverage: Lesson = {
       id: "go7vc-debug-printf",
       type: "debugging",
       prompt:
-        "This logging helper compiles fine but `go vet` refuses it. Find the bug vet is complaining about and fix it.\n\n```\nfunc logPosted(amount int64, account string) {\n    log.Printf(\"posted %s to account %d\", amount, account)\n}\n```",
+        'This logging helper compiles fine but `go vet` refuses it. Find the bug vet is complaining about and fix it.\n\n```\nfunc logPosted(amount int64, account string) {\n    log.Printf("posted %s to account %d", amount, account)\n}\n```',
       starterCode:
         'package ledger\n\nimport "log"\n\nfunc logPosted(amount int64, account string) {\n    // go vet: log.Printf format %s has arg amount of wrong type int64\n    log.Printf("posted %s to account %d", amount, account)\n}',
       expectedAnswer:
@@ -133,7 +135,7 @@ export const goVetCoverage: Lesson = {
       id: "go7vc-design-ci-gate",
       type: "design",
       prompt:
-        "Design the merge gate for LedgerFlow's Go backend. Say exactly which checks must pass before a PR can merge, in what order you'd run them, and what coverage threshold (if any) you'd require — and justify the threshold rather than just picking 100%.",
+        "Design the merge gate for a small Go service. Say which checks must pass, what order you would run them in, and whether you would require a coverage threshold. Justify the threshold instead of automatically choosing 100%.",
       expectedAnswer:
         "Gate on: (1) formatting (`gofmt`/`goimports` clean), (2) `go vet ./...`, (3) `golangci-lint run` with the curated config, (4) `go test -race ./...` passing, (5) a coverage floor. Run cheap/fast checks first (fmt, vet) so obvious problems fail quickly before the slower test+race run. For the threshold, don't require 100% — chasing it wastes effort on trivial code and tempts people to write assertion-free tests just to color lines green. Set a meaningful floor (e.g. ~80% overall) and optionally a higher bar on the money-handling packages, because coverage there is where an untested branch is most dangerous. The threshold's job is to stop coverage silently rotting, not to prove correctness.",
       hints: [
@@ -174,7 +176,7 @@ export const goVetCoverage: Lesson = {
       kind: "debug",
       description:
         "Identify and fix a mistake that `go vet` reports (such as a Printf format/argument mismatch) that the compiler accepted.",
-      required: true,
+      required: false,
     },
     {
       id: "design-ci-gate",
@@ -206,67 +208,8 @@ export const goVetCoverage: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The naive stance is: \"I have tests and it compiles, so extra tooling is busywork.\" That treats the compiler as the only automated safety net. But the compiler is deliberately permissive about things that are legal Go yet almost certainly bugs — it will happily accept `fmt.Printf(\"%d\", \"hello\")` because the types of `Printf`'s variadic args are all `interface{}`; the mismatch between the `%d` verb and a string only shows up at *runtime*, as `%!d(string=hello)`.\n\nThe second naive move is chasing a number: \"we need 100% coverage.\" It feels rigorous, but a percentage of *lines executed* says nothing about whether your tests actually *checked* anything. Both mistakes come from trusting one signal to mean more than it does.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "The compiler accepts a bug vet rejects",
-            language: "go",
-            code:
-              'package main\n\nimport "fmt"\n\nfunc main() {\n    name := "Ada"\n    // Compiles cleanly. Printf takes ...interface{}, so the types "fit".\n    fmt.Printf("hello %d\\n", name)\n}\n// Runs and prints:  hello %!d(string=Ada)\n// `go vet` says:     Printf format %d has arg name of wrong type string',
-            takeaway:
-              "The compiler can't reject this — the argument's static type is legal. `go vet` inspects the format string against the arguments and catches the mismatch the compiler is structurally unable to see.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "The compiler proves types; it does **not** try to catch likely-bug patterns like format mismatches.",
-            "\"100% coverage\" measures lines *run*, not assertions *made* — a misleading target on its own.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "Skipping this tooling fails in the most expensive way: the bug reaches production and *looks fine* until someone reads the output. A mismatched log verb doesn't crash — it silently writes `%!d(string=acct-42)` into your logs, and you only notice when you're paging through them at 2am trying to trace a bad transaction. An unchecked error from a database write doesn't fail loudly — it just… doesn't get handled, and a balance quietly drifts.\n\nThe coverage version of the failure is subtler and more seductive: the team proudly reports \"92% coverage,\" a critical `reverse()` function sits at 0%, and everyone feels safe because the *average* looked good. The number was real; the confidence it created was not.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The log line that lied for a month",
-            context:
-              "A ledger service logs every posting with `log.Printf(\"posted %d to %d\", amount, accountID)`, but `accountID` is a string like \"acct-42\". It compiles, tests pass (none check log output), and it ships. For a month, every posting logs `posted 500 to %!d(string=acct-42)`.",
-            insight:
-              "Nobody was doing anything wrong at review time — the bug is invisible to the compiler and to tests that don't assert on logs. A single `go vet` in CI would have failed the build the moment the code was pushed. The cost of skipping it wasn't zero; it was a month of unusable audit logs.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental image that organizes all of this. Picture three sieves stacked over your code, each with different-sized holes. The **compiler** is the coarse sieve on top: it stops code that's structurally broken — type errors, undefined names. Plenty of bugs fall straight through it. The **vet/lint** sieve sits below: finer holes that catch *suspicious but legal* patterns — the format mismatch, the ignored error, the unreachable line. Below that, **coverage** isn't a sieve at all — it's a flashlight showing you which parts of the code no sieve ever got to inspect, because no test ever ran them.\n\nSo you don't pick one tool; you stack them. Each catches what the one above lets through, and coverage tells you where you're flying blind.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "Static vs dynamic",
-            text: "Vet and linters are *static* analysis — they read your code without running it, like a proofreader. Coverage is *dynamic* — it watches your code actually run under tests. That's why they're complementary: static analysis reasons about all code paths but only shallow properties; coverage sees real execution but only of the inputs your tests supply.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "**Compiler**: structural correctness (types, syntax) — coarse, non-negotiable.",
-            "**Vet / linters**: likely-bug patterns that are legal but wrong — finer, static.",
-            "**Coverage**: which code your tests never executed — a flashlight, not a sieve.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "Make the division of labor precise. The **compiler** answers *\"is this well-formed?\"* — it will not compile if types don't match. **`go vet`** answers *\"is this a well-known kind of mistake?\"* — it runs a fixed set of *analyzers*, each looking for one specific bug pattern (Printf mismatches, struct tags that won't parse, copying a value that contains a lock, unreachable code). **Linters** (via `golangci-lint`) answer the same *shape* of question but with a much larger, configurable catalogue — including `staticcheck`, which does deeper analysis than vet. **Coverage** answers a completely different question: *\"which lines did my tests actually run?\"*\n\nThe trap is treating these as interchangeable. Vet is **not** a linter replacement (it's a small, curated, false-positive-averse core), and a linter is **not** a vet replacement (many linters assume vet's checks are already covered — indeed golangci-lint runs `govet` as one of its linters). And neither is coverage, which proves nothing about correctness at all.",
+      body: 'Make the division of labor precise. The **compiler** answers *"is this well-formed?" * — it will not compile if types don\'t match. **`go vet`** answers *"is this a well-known kind of mistake?" * — it runs a fixed set of *analyzers*, each looking for one specific bug pattern (Printf mismatches, struct tags that won\'t parse, copying a value that contains a lock, unreachable code).\n\n**Linters** (via `golangci-lint`) answer the same *shape* of question but with a much larger, configurable catalogue — including `staticcheck`, which does deeper analysis than vet. **Coverage** answers a completely different question: *"which lines did my tests actually run?" *\n\nThe trap is treating these as interchangeable. Vet is **not** a linter replacement (it\'s a small, curated, false-positive-averse core), and a linter is **not** a vet replacement (many linters assume vet\'s checks are already covered — indeed golangci-lint runs `govet` as one of its linters). And neither is coverage, which proves nothing about correctness at all.',
       blocks: [
         {
           type: "note",
@@ -282,12 +225,33 @@ export const goVetCoverage: Lesson = {
             title: "Four tools, four questions",
             kind: "stack",
             nodes: [
-              { id: "compiler", label: "Compiler", detail: "\"Is this well-formed?\" Types and syntax. Won't build otherwise.", tone: "muted" },
-              { id: "vet", label: "go vet", detail: "\"Is this a known mistake?\" Small, curated, high-confidence analyzers.", tone: "accent" },
-              { id: "lint", label: "golangci-lint (+ staticcheck)", detail: "\"Any of these many bug/style patterns?\" Configurable catalogue.", tone: "accent" },
-              { id: "cover", label: "coverage", detail: "\"Which lines did tests run?\" A flashlight, not a correctness proof.", tone: "success" },
+              {
+                id: "compiler",
+                label: "Compiler",
+                detail: '"Is this well-formed?" Types and syntax. Won\'t build otherwise.',
+                tone: "muted",
+              },
+              {
+                id: "vet",
+                label: "go vet",
+                detail: '"Is this a known mistake?" Small, curated, high-confidence analyzers.',
+                tone: "accent",
+              },
+              {
+                id: "lint",
+                label: "golangci-lint (+ staticcheck)",
+                detail: '"Any of these many bug/style patterns?" Configurable catalogue.',
+                tone: "accent",
+              },
+              {
+                id: "cover",
+                label: "coverage",
+                detail: '"Which lines did tests run?" A flashlight, not a correctness proof.',
+                tone: "success",
+              },
             ],
-            caption: "Each layer answers a different question; you stack them rather than choose between them.",
+            caption:
+              "Each layer answers a different question; you stack them rather than choose between them.",
           },
         },
       ],
@@ -300,8 +264,7 @@ export const goVetCoverage: Lesson = {
           example: {
             title: "The core commands, in order",
             language: "bash",
-            code:
-              '# Static checks (all analyzers; go test only runs a subset)\ngo vet ./...\n\n# Run tests and report coverage per package\ngo test -cover ./...\n\n# Write a coverage profile, then read it two ways\ngo test -coverprofile=cover.out ./...\ngo tool cover -func=cover.out   # per-function %, plus a total line\ngo tool cover -html=cover.out   # browser view: green = covered, red = not',
+            code: "# Static checks (all analyzers; go test only runs a subset)\ngo vet ./...\n\n# Run tests and report coverage per package\ngo test -cover ./...\n\n# Write a coverage profile, then read it two ways\ngo test -coverprofile=cover.out ./...\ngo tool cover -func=cover.out   # per-function %, plus a total line\ngo tool cover -html=cover.out   # browser view: green = covered, red = not",
             takeaway:
               "Vet for likely bugs; `-coverprofile` to capture what ran; `go tool cover -func` for a quick number and `-html` to see the exact untested lines in red.",
           },
@@ -311,8 +274,7 @@ export const goVetCoverage: Lesson = {
           example: {
             title: "Reading -func output",
             language: "bash",
-            code:
-              'go tool cover -func=cover.out\n# ledger/post.go:12:  Post          100.0%\n# ledger/post.go:40:  reverse         0.0%   <- nothing tested this\n# ledger/post.go:71:  validate       85.7%\n# total:              (statements)   78.9%',
+            code: "go tool cover -func=cover.out\n# ledger/post.go:12:  Post          100.0%\n# ledger/post.go:40:  reverse         0.0%   <- nothing tested this\n# ledger/post.go:71:  validate       85.7%\n# total:              (statements)   78.9%",
             takeaway:
               "The per-function lines are the signal. A healthy-looking 78.9% total hides a `reverse` function at 0.0% — always read the breakdown, not just the total.",
           },
@@ -337,12 +299,23 @@ export const goVetCoverage: Lesson = {
             kind: "flow",
             nodes: [
               { id: "src", label: "Your source", detail: "the packages under test" },
-              { id: "instr", label: "Toolchain inserts counters", detail: "one per basic block", tone: "accent" },
+              {
+                id: "instr",
+                label: "Toolchain inserts counters",
+                detail: "one per basic block",
+                tone: "accent",
+              },
               { id: "run", label: "Tests run", detail: "each executed block bumps its counter" },
               { id: "profile", label: "cover.out written", detail: "count per block: 0 or more" },
-              { id: "report", label: "% = covered / total", detail: "0 = red (untested), >0 = green (executed)", tone: "success" },
+              {
+                id: "report",
+                label: "% = covered / total",
+                detail: "0 = red (untested), >0 = green (executed)",
+                tone: "success",
+              },
             ],
-            caption: "Coverage counts whether each block *executed* — it never inspects whether a test *asserted* anything about the result.",
+            caption:
+              "Coverage counts whether each block *executed* — it never inspects whether a test *asserted* anything about the result.",
           },
         },
       ],
@@ -355,8 +328,7 @@ export const goVetCoverage: Lesson = {
           example: {
             title: "A local `make check` that mirrors CI",
             language: "bash",
-            code:
-              '# Makefile — each prerequisite runs in order; make stops at the first failure.\n.PHONY: check fmt-check vet lint test\n\ncheck: fmt-check vet lint test\n\nfmt-check:\n\t@test -z "$(shell gofmt -l .)" || (echo "run gofmt on:" && gofmt -l . && exit 1)\n\nvet:\n\tgo vet ./...\n\nlint:\n\tgolangci-lint run\n\ntest:\n\tgo test -race -coverprofile=cover.out ./...',
+            code: '# Makefile — each prerequisite runs in order; make stops at the first failure.\n.PHONY: check fmt-check vet lint test\n\ncheck: fmt-check vet lint test\n\nfmt-check:\n\t@test -z "$(shell gofmt -l .)" || (echo "run gofmt on:" && gofmt -l . && exit 1)\n\nvet:\n\tgo vet ./...\n\nlint:\n\tgolangci-lint run\n\ntest:\n\tgo test -race -coverprofile=cover.out ./...',
             takeaway:
               "One command, cheap checks first (formatting, vet) then the slower `-race` test run. Running the identical steps in CI makes the gate and your local loop the same thing.",
           },
@@ -366,8 +338,7 @@ export const goVetCoverage: Lesson = {
           example: {
             title: "A curated .golangci.yml (start small)",
             language: "bash",
-            code:
-              '# .golangci.yml — a trusted core, not everything.\nlinters:\n  enable:\n    - govet        # the vet analyzers, run by golangci-lint too\n    - staticcheck  # deep, high-signal analysis\n    - errcheck     # flags ignored error returns\n    - ineffassign  # assignments whose value is never used\n    - unused       # unused code',
+            code: "# .golangci.yml — a trusted core, not everything.\nlinters:\n  enable:\n    - govet        # the vet analyzers, run by golangci-lint too\n    - staticcheck  # deep, high-signal analysis\n    - errcheck     # flags ignored error returns\n    - ineffassign  # assignments whose value is never used\n    - unused       # unused code",
             takeaway:
               "Enable a small set of high-signal linters and grow it deliberately. A config whose output people trust is worth more than one that catches everything and is ignored.",
           },
@@ -391,7 +362,7 @@ export const goVetCoverage: Lesson = {
         {
           type: "points",
           items: [
-            "**\"Tests pass so vet is redundant\"** → `go test` only runs a *subset* of vet; run full `go vet ./...` (and lint) in CI to catch the rest.",
+            '**"Tests pass so vet is redundant"** → `go test` only runs a *subset* of vet; run full `go vet ./...` (and lint) in CI to catch the rest.',
             "**Chasing 100% coverage** → rewards line-touching over assertion-making and tempts assertion-free tests; set a meaningful floor instead.",
             "**Trusting the total %** → a healthy average can hide a 0%-covered critical function; read the per-function breakdown.",
             "**Enabling every linter** → thousands of warnings train everyone to ignore all of them; curate a trusted core.",
@@ -404,8 +375,7 @@ export const goVetCoverage: Lesson = {
           example: {
             title: "An unchecked error vet won't catch but errcheck will",
             language: "go",
-            code:
-              '// Compiles. `go vet` stays silent. But the write error is dropped.\nfunc save(db *sql.DB, id string) {\n    db.Exec("INSERT INTO ledger(id) VALUES ($1)", id) // error ignored\n}\n\n// errcheck (in golangci-lint) flags it; handle the error:\nfunc save(db *sql.DB, id string) error {\n    _, err := db.Exec("INSERT INTO ledger(id) VALUES ($1)", id)\n    return err\n}',
+            code: '// Compiles. `go vet` stays silent. But the write error is dropped.\nfunc save(db *sql.DB, id string) {\n    db.Exec("INSERT INTO ledger(id) VALUES ($1)", id) // error ignored\n}\n\n// errcheck (in golangci-lint) flags it; handle the error:\nfunc save(db *sql.DB, id string) error {\n    _, err := db.Exec("INSERT INTO ledger(id) VALUES ($1)", id)\n    return err\n}',
             takeaway:
               "This is why lint isn't optional on top of vet: a dropped error is a classic silent bug vet doesn't flag but `errcheck` does. Different tools, different catches.",
           },
@@ -427,7 +397,7 @@ export const goVetCoverage: Lesson = {
       ],
     },
     design: {
-      body: "A few durable rules. Run the cheap checks first so obvious problems fail in seconds, not minutes. Make the local command and the CI gate identical, so \"passes on my machine\" means \"passes CI.\" Treat coverage as a *floor that stops backsliding*, not a target to maximize — and put the higher bar where the risk is (money-handling code), not everywhere. And curate your linters: every enabled check must earn its place by finding real bugs more often than it cries wolf.",
+      body: 'A few durable rules. Run the cheap checks first so obvious problems fail in seconds, not minutes. Make the local command and the CI gate identical, so "passes on my machine" means "passes CI." Treat coverage as a *floor that stops backsliding*, not a target to maximize — and put the higher bar where the risk is (money-handling code), not everywhere. And curate your linters: every enabled check must earn its place by finding real bugs more often than it cries wolf.',
       blocks: [
         {
           type: "points",
@@ -440,7 +410,7 @@ export const goVetCoverage: Lesson = {
         {
           type: "scenario",
           scenario: {
-            title: "Setting the gate for LedgerFlow",
+            title: "Setting a useful merge gate",
             context:
               "The team wants to stop untested balance logic and mismatched log lines from reaching main, without a CI run so slow or noisy that people route around it.",
             insight:
@@ -449,35 +419,11 @@ export const goVetCoverage: Lesson = {
         },
       ],
     },
-    ledgerflow: {
-      body: "LedgerFlow puts all of this behind a single merge gate. Every pull request must pass, in order: `gofmt`/`goimports` clean, `go vet ./...`, `golangci-lint run` with a curated config (govet, staticcheck, errcheck, ineffassign, unused), `go test -race ./...`, and a coverage floor. The floor is deliberately not 100% — it's a meaningful overall threshold with a higher bar on the money-handling packages, because that's where an untested branch can silently corrupt a balance. The cheap checks (formatting, vet) run first so a mismatched log verb or a stray formatting slip fails the build in seconds, long before the slower race-detector test run. The result: a Printf format bug, a dropped database error, or a newly-untested balance path can't reach main, and no human has to remember to check for them.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: the CI merge gate",
-            kind: "sequence",
-            nodes: [
-              { id: "pr", label: "PR opened / pushed", detail: "CI triggers on every change" },
-              { id: "fmt", label: "gofmt / goimports check", detail: "instant; unformatted code fails first", tone: "accent" },
-              { id: "vet", label: "go vet ./...", detail: "catches Printf mismatches, copied locks, bad tags" },
-              { id: "lint", label: "golangci-lint run", detail: "staticcheck + errcheck + more, curated set" },
-              { id: "test", label: "go test -race + coverage floor", detail: "slower; must pass and clear the threshold" },
-              { id: "merge", label: "Merge allowed", detail: "only when every step is green", tone: "success" },
-            ],
-            caption: "Cheap checks first, coverage floor on the risky packages, and merge blocked until all green — the tooling does the vigilance.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about vet and coverage\" into \"I reach for `make check` without thinking.\" Work across predicting how `go test` invokes vet, debugging a real Printf format bug, reading a coverage report for the function that actually needs tests, implementing a combined check target, curating a noisy linter config, and designing a merge gate with a justified coverage threshold. Each produces a different kind of evidence — do them, don't just read them.",
-    },
     mastery: {
       body: "You've mastered this when you can explain the division of labor between the compiler, vet/linters, and coverage — what each catches and what it can't; correctly state what a coverage percentage does and does not prove (including why a 100%-covered function can still be buggy); find and fix a mistake `go vet` reports that the compiler accepted; and design a local check plus a CI gate composing formatting, vet, lint, and coverage with a threshold you can defend. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Two ideas carry this lesson. **Each tool answers a different question** — the compiler proves your code is well-formed, `go vet` and linters catch likely-bug patterns the compiler allows (a Printf mismatch, a dropped error, a copied lock), and coverage shows which lines your tests never ran. You stack them; none replaces another. **And a number is not a proof** — 100% coverage means every line *ran*, not that any test *checked* the result, so it's a floor against rot, never a correctness score. Wire vet, a curated lint set, formatting, and a coverage floor into one `make check` and the identical CI merge gate, and the machine does this vigilance for you on every change.",
+      body: "Two ideas carry this lesson. **Each tool answers a different question** — the compiler proves your code is well-formed, `go vet` and linters catch likely-bug patterns the compiler allows (a Printf mismatch, a dropped error, a copied lock), and coverage shows which lines your tests never ran. You stack them; none replaces another.\n\n**And a number is not a proof** — 100% coverage means every line *ran*, not that any test *checked* the result, so it's a floor against rot, never a correctness score. Wire vet, a curated lint set, formatting, and a coverage floor into one `make check` and the identical CI merge gate, and the machine does this vigilance for you on every change.",
       blocks: [
         {
           type: "points",

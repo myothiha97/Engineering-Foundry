@@ -25,19 +25,15 @@ export const goFuzzing: Lesson = {
     "Triage a discovered crasher by reading its saved `testdata/fuzz` file, and choose fuzz-friendly properties (no-panic, round-trip, differential) instead of hand-picked cases",
   ],
   concepts: ["fuzzing", "corpus", "seed"],
-  ledgerFlowApplications: [
-    "Fuzz the transaction parser that turns a raw CSV/amount string into a typed Transaction, so no untrusted input can panic it",
-    "Assert the round-trip invariant `Parse(Format(tx)) == tx` so formatting and parsing can never silently disagree",
-    "Check every crasher the fuzzer finds into `testdata/fuzz` so the exact bad input is replayed on every future `go test`",
-  ],
   references: [
     {
       title: "Go Fuzzing tutorial",
       url: "https://go.dev/doc/tutorial/fuzz",
       teaches:
         "A step-by-step first fuzz test: writing FuzzXxx, seeding with f.Add, running -fuzz, and fixing the first crasher it reports.",
-      relevance: "The canonical hands-on introduction this lesson mirrors — do it once and the mechanics click.",
-      required: true,
+      relevance:
+        "The canonical hands-on introduction this lesson mirrors — do it once and the mechanics click.",
+      required: false,
       section: "Add a fuzz test",
     },
     {
@@ -46,14 +42,16 @@ export const goFuzzing: Lesson = {
       teaches:
         "The full model: supported input types, the seed vs. generated corpus, where crashers are saved, and command-line flags like -fuzz and -fuzztime.",
       relevance: "The authoritative reference for every rule stated in this lesson.",
-      required: true,
+      required: false,
       section: "Overview",
     },
     {
       title: "testing package — type F",
       url: "https://pkg.go.dev/testing#F",
-      teaches: "The exact API of *testing.F: Add for seeding and Fuzz for registering the fuzz target.",
-      relevance: "Settles the precise signatures and the rule that f.Add argument types must match the f.Fuzz parameters.",
+      teaches:
+        "The exact API of *testing.F: Add for seeding and Fuzz for registering the fuzz target.",
+      relevance:
+        "Settles the precise signatures and the rule that f.Add argument types must match the f.Fuzz parameters.",
       required: false,
       section: "type F",
     },
@@ -75,7 +73,7 @@ export const goFuzzing: Lesson = {
       id: "go7fz-read-signature",
       type: "code-reading",
       prompt:
-        "Read this and say why it fails to compile:\n\n```go\nfunc FuzzParse(f *testing.F) {\n    f.Add(\"12.50\")\n    f.Fuzz(func(t *testing.T, n int) {\n        _ = Parse(n)\n    })\n}\n```\nWhat is the rule being violated?",
+        'Read this and say why it fails to compile:\n\n```go\nfunc FuzzParse(f *testing.F) {\n    f.Add("12.50")\n    f.Fuzz(func(t *testing.T, n int) {\n        _ = Parse(n)\n    })\n}\n```\nWhat is the rule being violated?',
       expectedAnswer:
         "The seed added with f.Add is a string, but the f.Fuzz target's fuzz argument is an int. The types of the f.Add arguments must match, in order, the types of the f.Fuzz function's arguments after the *testing.T. Change the seed to an int, or change the target parameter to string.",
       hints: [
@@ -113,9 +111,9 @@ export const goFuzzing: Lesson = {
       id: "go7fz-debug-crasher",
       type: "debugging",
       prompt:
-        "Running `go test -fuzz=FuzzParseAmount` stops and reports a failure, saving `testdata/fuzz/FuzzParseAmount/a1b2c3`. The file's fuzzed value is the string `\"\"` (empty). ParseAmount does `parts := strings.Split(s, \".\"); whole := parts[0]; frac := parts[1]` and panics with index out of range. Explain the bug and fix it.",
+        'Running `go test -fuzz=FuzzParseAmount` stops and reports a failure, saving `testdata/fuzz/FuzzParseAmount/a1b2c3`. The file\'s fuzzed value is the string `""` (empty). ParseAmount does `parts := strings.Split(s, "."); whole := parts[0]; frac := parts[1]` and panics with index out of range. Explain the bug and fix it.',
       expectedAnswer:
-        "For an input with no '.', strings.Split returns a slice of length 1, so parts[1] is out of range and panics — the fuzzer found the empty string reaches that line. The fix is to handle the shape of the input before indexing: check len(parts) (or use strings.Cut) and return an error for malformed input instead of indexing blindly, e.g. `whole, frac, ok := strings.Cut(s, \".\"); if !ok { return 0, fmt.Errorf(\"missing decimal point: %q\", s) }`. The saved crasher file stays in testdata/fuzz so plain `go test` replays the empty string forever as a regression test.",
+        'For an input with no \'.\', strings.Split returns a slice of length 1, so parts[1] is out of range and panics — the fuzzer found the empty string reaches that line. The fix is to handle the shape of the input before indexing: check len(parts) (or use strings.Cut) and return an error for malformed input instead of indexing blindly, e.g. `whole, frac, ok := strings.Cut(s, "."); if !ok { return 0, fmt.Errorf("missing decimal point: %q", s) }`. The saved crasher file stays in testdata/fuzz so plain `go test` replays the empty string forever as a regression test.',
       hints: [
         "strings.Split never guarantees more than one element — indexing parts[1] assumes a '.' was present.",
         "The saved file under testdata/fuzz is the exact failing input; run `go test` (no -fuzz) to replay just that case while you fix it.",
@@ -125,9 +123,9 @@ export const goFuzzing: Lesson = {
       id: "go7fz-read-corpusfile",
       type: "code-reading",
       prompt:
-        "A teammate opens a crasher file at `testdata/fuzz/FuzzParse/f9c2` and sees:\n\n```\ngo test fuzz v1\nstring(\"1,,3\")\n```\nExplain what this file is, what the two lines mean, and what happens to it on the next `go test`.",
+        'A teammate opens a crasher file at `testdata/fuzz/FuzzParse/f9c2` and sees:\n\n```\ngo test fuzz v1\nstring("1,,3")\n```\nExplain what this file is, what the two lines mean, and what happens to it on the next `go test`.',
       expectedAnswer:
-        "It is a saved corpus entry that the fuzzer wrote when the fuzz target failed on this input. The first line is a format header (go test fuzz v1); the following line is the fuzzed argument and its type — here a single string value \"1,,3\". Because it lives under testdata/fuzz/FuzzParse, plain `go test` (no -fuzz) automatically re-runs FuzzParse with exactly this input, so it acts as a permanent regression test. It should be committed to the repo.",
+        'It is a saved corpus entry that the fuzzer wrote when the fuzz target failed on this input. The first line is a format header (go test fuzz v1); the following line is the fuzzed argument and its type — here a single string value "1,,3". Because it lives under testdata/fuzz/FuzzParse, plain `go test` (no -fuzz) automatically re-runs FuzzParse with exactly this input, so it acts as a permanent regression test. It should be committed to the repo.',
       hints: [
         "The first line is a version header; each remaining line is one typed fuzz argument.",
         "Files under testdata/fuzz/<Name> are part of the seed corpus that runs during ordinary `go test`.",
@@ -198,67 +196,8 @@ export const goFuzzing: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "Faced with a parser that keeps breaking on odd inputs, the natural instinct is to keep *adding rows to the table*. A user reports a crash on `\"1,,3\"`? Add a test case for `\"1,,3\"`. Another crash on the empty string? Add a row for that too. It feels like progress — each fix closes a hole.\n\nBut you're playing whack-a-mole against an infinite supply of inputs. Every fix covers exactly one input; the next weird string sails right through. You're doing by hand, one case at a time, the very thing a fuzzer does automatically by the thousand. The naive move isn't wrong, it just doesn't scale — you'll never out-type a machine that generates inputs faster than you can imagine them.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Chasing crashers one table row at a time",
-            language: "go",
-            code:
-              'func TestParseAmount(t *testing.T) {\n    cases := []string{"12.50", "0.00", "1,,3", ""} // grows every time prod crashes\n    for _, in := range cases {\n        t.Run(in, func(t *testing.T) {\n            _, _ = ParseAmount(in) // we only test the inputs we already know are bad\n        })\n    }\n}',
-            takeaway:
-              "Each production crash teaches you exactly one new input to add. The parser has infinitely many inputs you haven't seen, so the table never catches up.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Adding a table row per crash fixes one input and misses the next.",
-            "You are manually doing what a fuzzer automates — generating inputs — just far slower.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The manual approach fails precisely where it hurts: on the inputs nobody thought to write down. And the failure is usually a **panic** — an index out of range, a nil dereference, a slice bound — that takes down the whole request, not a tidy `error` you can return. A parser that turns raw text into a typed value is a magnet for this, because raw text has no rules: it can be empty, enormous, or shaped in ways your code silently assumes it never will be.\n\nThe root cause is an assumption baked into most parsing code: *\"the input will look roughly like the examples I tested.\"* Fuzzing exists to violate that assumption on purpose. The empty string, `\"1,,3\"`, a string with no separator — these are exactly the inputs a fuzzer stumbles onto in seconds and your table never contained.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The parser that panics in production",
-            context:
-              "LedgerFlow's importer calls ParseAmount on each field of an uploaded CSV. It splits on '.' and reads parts[0] and parts[1]. Every hand-written test passed. Then a user uploads a file where one amount field is just \"50\" — no decimal point.",
-            insight:
-              "strings.Split(\"50\", \".\") returns a one-element slice, so parts[1] panics with index out of range, and the whole import crashes. No table row covered a value without a dot, because nobody imagined one. A fuzzer generating strings finds this in seconds — it doesn't share your assumptions.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental image that makes fuzzing click. You keep a small basket of **seed** inputs — a handful of example values you hand the fuzzer to start with (`\"12.50\"`, `\"0.00\"`). The fuzzer doesn't just run those; it *mutates* them — flips a byte, deletes a character, doubles a section, splices two together — and tries the mutants. Every time a mutant makes your code do something new (reach a branch it hadn't reached before), the fuzzer keeps it as interesting and mutates *it* further. Over thousands of rounds it drifts into the strange corners of your input space, guided toward code paths you never tested.\n\nYou don't check each generated input against an expected output — there are far too many, and you don't know what most of them should produce. Instead you assert a **property**: a statement that must be true for *every* input. If a generated input ever makes the property false, the fuzzer has found a bug and stops to show you the exact input.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "The word 'corpus'",
-            text: "A corpus is just the collection of inputs the fuzzer works with. The seed corpus is what you provide (via f.Add) plus files under testdata/fuzz; the generated corpus is the mutated inputs the fuzzer creates while running. 'Seed' = a starting example you give it.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "You give the fuzzer a few **seed** inputs; it **mutates** them to invent thousands more.",
-            "It's guided: inputs that reach new code paths are kept and mutated further.",
-            "You assert a **property** true for all inputs, not an expected output per input.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "So the durable model is: **table tests check specific answers; fuzz tests check universal rules.** In a table test you assert `ParseAmount(\"12.50\") == 1250` — a fact about one input. In a fuzz test you assert something that must hold for *all* inputs, like \"this never panics\" or \"parsing what I formatted gives back the original.\" The machine's job is to search for a counterexample to your rule.\n\nThat reframing is the whole skill. You stop asking \"what output do I expect for this input?\" (which you can't answer for a random string) and start asking \"what must be true regardless of the input?\" A rule that survives millions of generated inputs is far stronger evidence of correctness than a dozen cases you chose because they were easy to reason about.",
+      body: 'So the durable model is: **table tests check specific answers; fuzz tests check universal rules.** In a table test you assert `ParseAmount("12.50") == 1250` — a fact about one input. In a fuzz test you assert something that must hold for *all* inputs, like "this never panics" or "parsing what I formatted gives back the original." The machine\'s job is to search for a counterexample to your rule.\n\nThat reframing is the whole skill. You stop asking "what output do I expect for this input?" (which you can\'t answer for a random string) and start asking "what must be true regardless of the input?" A rule that survives millions of generated inputs is far stronger evidence of correctness than a dozen cases you chose because they were easy to reason about.',
       blocks: [
         {
           type: "diagram",
@@ -269,17 +208,20 @@ export const goFuzzing: Lesson = {
               {
                 id: "table",
                 label: "Table test",
-                detail: "You supply inputs AND expected outputs. Checks specific answers you can predict. Blind to inputs you didn't list.",
+                detail:
+                  "You supply inputs AND expected outputs. Checks specific answers you can predict. Blind to inputs you didn't list.",
                 tone: "muted",
               },
               {
                 id: "fuzz",
                 label: "Fuzz test",
-                detail: "You supply seeds AND a property. The machine invents inputs and hunts for one that breaks the property.",
+                detail:
+                  "You supply seeds AND a property. The machine invents inputs and hunts for one that breaks the property.",
                 tone: "success",
               },
             ],
-            caption: "Same parser, different question: 'is this answer right?' versus 'is this rule always true?'",
+            caption:
+              "Same parser, different question: 'is this answer right?' versus 'is this rule always true?'",
           },
         },
         {
@@ -287,7 +229,7 @@ export const goFuzzing: Lesson = {
           note: {
             tone: "warning",
             title: "Common trap",
-            text: "Fuzzing does not replace table tests — it complements them. Table tests pin down exact expected outputs (that \"12.50\" really is 1250); fuzzing proves rules hold across inputs you can't enumerate. You want both.",
+            text: 'Fuzzing does not replace table tests — it complements them. Table tests pin down exact expected outputs (that "12.50" really is 1250); fuzzing proves rules hold across inputs you can\'t enumerate. You want both.',
           },
         },
       ],
@@ -308,8 +250,7 @@ export const goFuzzing: Lesson = {
           example: {
             title: "A minimal fuzz test, annotated",
             language: "go",
-            code:
-              'func FuzzParseAmount(f *testing.F) {\n    f.Add("12.50") // seed: one string, matches the target parameter below\n    f.Add("0.00")  // more seeds give the mutator better starting points\n    f.Fuzz(func(t *testing.T, in string) {\n        // `in` is a generated input: sometimes a seed, usually a mutation of one\n        _, _ = ParseAmount(in) // property here: it must simply return, never panic\n    })\n}',
+            code: 'func FuzzParseAmount(f *testing.F) {\n    f.Add("12.50") // seed: one string, matches the target parameter below\n    f.Add("0.00")  // more seeds give the mutator better starting points\n    f.Fuzz(func(t *testing.T, in string) {\n        // `in` is a generated input: sometimes a seed, usually a mutation of one\n        _, _ = ParseAmount(in) // property here: it must simply return, never panic\n    })\n}',
             takeaway:
               "f.Add fills the seed corpus; f.Fuzz's function runs against every input the fuzzer produces. The seed type (string) matches the fuzzed parameter (string) — that pairing is mandatory.",
           },
@@ -333,14 +274,44 @@ export const goFuzzing: Lesson = {
             title: "The same fuzz test, two run modes",
             kind: "sequence",
             nodes: [
-              { id: "seeds", label: "You write FuzzParse with f.Add seeds", detail: "seeds live in code (and testdata/fuzz files)" },
-              { id: "plain", label: "`go test` → seed corpus only", detail: "runs each seed once as a normal test; no new inputs", tone: "muted" },
-              { id: "fuzz", label: "`go test -fuzz=FuzzParse` → generate", detail: "runs seeds, then mutates them into thousands of new inputs", tone: "accent" },
-              { id: "search", label: "Runs until failure or interrupt", detail: "or until -fuzztime elapses", tone: "default" },
-              { id: "save", label: "On failure: save the crasher", detail: "writes the exact input to testdata/fuzz/FuzzParse/<hash>", tone: "danger" },
-              { id: "regress", label: "Crasher becomes a seed", detail: "future `go test` replays it forever as a regression test", tone: "success" },
+              {
+                id: "seeds",
+                label: "You write FuzzParse with f.Add seeds",
+                detail: "seeds live in code (and testdata/fuzz files)",
+              },
+              {
+                id: "plain",
+                label: "`go test` → seed corpus only",
+                detail: "runs each seed once as a normal test; no new inputs",
+                tone: "muted",
+              },
+              {
+                id: "fuzz",
+                label: "`go test -fuzz=FuzzParse` → generate",
+                detail: "runs seeds, then mutates them into thousands of new inputs",
+                tone: "accent",
+              },
+              {
+                id: "search",
+                label: "Runs until failure or interrupt",
+                detail: "or until -fuzztime elapses",
+                tone: "default",
+              },
+              {
+                id: "save",
+                label: "On failure: save the crasher",
+                detail: "writes the exact input to testdata/fuzz/FuzzParse/<hash>",
+                tone: "danger",
+              },
+              {
+                id: "regress",
+                label: "Crasher becomes a seed",
+                detail: "future `go test` replays it forever as a regression test",
+                tone: "success",
+              },
             ],
-            caption: "Generation happens only under -fuzz. Every failing input it finds is saved and then replayed by ordinary test runs.",
+            caption:
+              "Generation happens only under -fuzz. Every failing input it finds is saved and then replayed by ordinary test runs.",
           },
         },
       ],
@@ -353,8 +324,7 @@ export const goFuzzing: Lesson = {
           example: {
             title: "A round-trip fuzz test for an amount codec",
             language: "go",
-            code:
-              'func FuzzAmountRoundTrip(f *testing.F) {\n    f.Add(int64(0))    // seed with the tricky values you already know\n    f.Add(int64(1250))\n    f.Add(int64(-99))  // negatives are a classic round-trip breaker\n    f.Fuzz(func(t *testing.T, cents int64) {\n        s := FormatAmount(cents)          // e.g. -99 -> "-0.99"\n        got, err := ParseAmount(s)        // parse the text back\n        if err != nil {\n            t.Fatalf("ParseAmount(%q) failed for cents=%d: %v", s, cents, err)\n        }\n        if got != cents {                 // the property: it must round-trip\n            t.Errorf("round-trip: cents=%d formatted to %q parsed back as %d", cents, s, got)\n        }\n    })\n}',
+            code: 'func FuzzAmountRoundTrip(f *testing.F) {\n    f.Add(int64(0))    // seed with the tricky values you already know\n    f.Add(int64(1250))\n    f.Add(int64(-99))  // negatives are a classic round-trip breaker\n    f.Fuzz(func(t *testing.T, cents int64) {\n        s := FormatAmount(cents)          // e.g. -99 -> "-0.99"\n        got, err := ParseAmount(s)        // parse the text back\n        if err != nil {\n            t.Fatalf("ParseAmount(%q) failed for cents=%d: %v", s, cents, err)\n        }\n        if got != cents {                 // the property: it must round-trip\n            t.Errorf("round-trip: cents=%d formatted to %q parsed back as %d", cents, s, got)\n        }\n    })\n}',
             takeaway:
               "The fuzzed input is the int64 `cents`; the property is Parse(Format(x)) == x. Seed types (int64) match the target parameter (int64). No expected-output table needed — the rule IS the check.",
           },
@@ -370,7 +340,7 @@ export const goFuzzing: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. You have this fuzz test for a parser, and you run it two ways:\n\n```\nfunc FuzzParse(f *testing.F) {\n    f.Add(\"12.50\")\n    f.Fuzz(func(t *testing.T, in string) {\n        _, _ = Parse(in) // Parse panics on the empty string\n    })\n}\n```\n\nFirst you run `go test` (no flags). Then you run `go test -fuzz=FuzzParse`. Which run catches the empty-string panic? Commit to an answer.\n\nHere's the trace. Under plain `go test`, only the seed corpus runs — just `\"12.50\"` (plus anything already in testdata/fuzz). `\"12.50\"` doesn't panic, so the test **passes**; the bug hides. Under `go test -fuzz=FuzzParse`, the fuzzer starts from `\"12.50\"` and mutates it — deleting characters, shortening it — and within moments generates the empty string, which panics. The run **fails**, prints the crashing input, and writes it to `testdata/fuzz/FuzzParse/<hash>`. From then on, even plain `go test` catches it, because that saved file is now part of the seed corpus. The lesson: generation only happens under `-fuzz`, but once a crasher is saved it protects you forever.",
+      body: 'Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. You have this fuzz test for a parser, and you run it two ways:\n\n```\nfunc FuzzParse(f *testing.F) {\n    f.Add("12.50")\n    f.Fuzz(func(t *testing.T, in string) {\n        _, _ = Parse(in) // Parse panics on the empty string\n    })\n}\n```\n\nFirst you run `go test` (no flags). Then you run `go test -fuzz=FuzzParse`. Which run catches the empty-string panic? Commit to an answer.\n\nHere\'s the trace. Under plain `go test`, only the seed corpus runs — just `"12.50"` (plus anything already in testdata/fuzz). `"12.50"` doesn\'t panic, so the test **passes**; the bug hides. Under `go test -fuzz=FuzzParse`, the fuzzer starts from `"12.50"` and mutates it — deleting characters, shortening it — and within moments generates the empty string, which panics.\n\nThe run **fails**, prints the crashing input, and writes it to `testdata/fuzz/FuzzParse/<hash>`. From then on, even plain `go test` catches it, because that saved file is now part of the seed corpus. The lesson: generation only happens under `-fuzz`, but once a crasher is saved it protects you forever.',
     },
     "failure-cases": {
       body: "The failures here cluster around three misunderstandings: thinking plain `go test` fuzzes, choosing a property that isn't actually universal, and writing a target the fuzzer can't work with. Here are the ones you'll actually meet.",
@@ -379,7 +349,7 @@ export const goFuzzing: Lesson = {
           type: "points",
           items: [
             "**Expecting `go test` to generate inputs** → it doesn't; without `-fuzz` it only runs the seed corpus. You must pass `-fuzz=FuzzXxx` to generate.",
-            "**Seed type ≠ target type** → `f.Add(\"x\")` with a target parameter of `int` won't compile. Match each seed to its fuzzed parameter, in order.",
+            '**Seed type ≠ target type** → `f.Add("x")` with a target parameter of `int` won\'t compile. Match each seed to its fuzzed parameter, in order.',
             "**A property that isn't universal** → asserting `err == nil` for a parser that *should* reject bad input means every malformed generated input 'fails' falsely. Assert no-panic, or round-trip on the success path only.",
             "**A slow or nondeterministic target** → network calls, sleeps, or randomness inside f.Fuzz cripple throughput and make saved crashers fail to reproduce. Keep the target fast and pure.",
             "**Running unbounded in CI** → bare `-fuzz` runs until it fails or is killed. Use `-fuzztime` to bound it, and let plain `go test` run the corpus on every build.",
@@ -390,8 +360,7 @@ export const goFuzzing: Lesson = {
           example: {
             title: "A bad property vs. a good one",
             language: "go",
-            code:
-              '// BAD: malformed input SHOULD error, so this fails on almost every generated input.\nf.Fuzz(func(t *testing.T, in string) {\n    _, err := ParseAmount(in)\n    if err != nil {\n        t.Errorf("unexpected error for %q", in) // wrong: errors are legitimate here\n    }\n})\n\n// GOOD: a rule true for ALL inputs — it must never panic.\nf.Fuzz(func(t *testing.T, in string) {\n    _, _ = ParseAmount(in) // a panic fails the run; an error is a fine outcome\n})',
+            code: '// BAD: malformed input SHOULD error, so this fails on almost every generated input.\nf.Fuzz(func(t *testing.T, in string) {\n    _, err := ParseAmount(in)\n    if err != nil {\n        t.Errorf("unexpected error for %q", in) // wrong: errors are legitimate here\n    }\n})\n\n// GOOD: a rule true for ALL inputs — it must never panic.\nf.Fuzz(func(t *testing.T, in string) {\n    _, _ = ParseAmount(in) // a panic fails the run; an error is a fine outcome\n})',
             takeaway:
               "A fuzz property must hold for every input. 'Never errors' is false for a parser (bad input should error); 'never panics' is a rule that genuinely must always hold.",
           },
@@ -429,41 +398,18 @@ export const goFuzzing: Lesson = {
           scenario: {
             title: "Choosing the property for ParseTransaction",
             context:
-              "LedgerFlow's ParseTransaction(raw string) turns one raw CSV line into a typed Transaction, returning an error for malformed lines. You want to fuzz it but 'never errors' is clearly wrong — bad lines must error.",
+              "`ParseRecord(raw string)` turns one CSV line into a typed Record and returns an error for malformed lines. You want to fuzz it, but 'never errors' is the wrong property because bad lines should fail.",
             insight:
               "Use two properties. (1) No-panic: call ParseTransaction(raw) for any input and let a panic fail the run — untrusted upload data must never crash the importer. (2) Round-trip on success: if err == nil, then ParseTransaction(Format(tx)) must equal tx — formatting and parsing can never silently disagree. Both hold for every input, which is exactly what fuzzing needs.",
           },
         },
       ],
     },
-    ledgerflow: {
-      body: "This is exactly how LedgerFlow hardens its importer. The transaction parser takes raw, untrusted text from an uploaded CSV — an amount string, a date, a description — and turns it into a typed `Transaction`. That's the riskiest surface in the app: the input comes from outside and follows no rules. So LedgerFlow fuzzes it with two properties. A **no-panic** fuzz test throws generated strings at `ParseAmount` and `ParseTransaction` and demands they always return normally (a value or an error), never crash the import. A **round-trip** fuzz test asserts `ParseTransaction(Format(tx)) == tx` on the success path, so a formatting change can never silently break parsing. Every crasher the fuzzer finds — the empty field, the amount with no decimal point, the doubled separator — is saved under `testdata/fuzz` and committed, so that exact bad input is replayed on every future `go test` and can never regress.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: fuzzing the transaction parser",
-            kind: "flow",
-            nodes: [
-              { id: "seed", label: "Seed corpus", detail: "known-tricky lines: empty, no dot, negative amount", tone: "accent" },
-              { id: "gen", label: "Fuzzer mutates inputs", detail: "invents raw strings you never wrote" },
-              { id: "parse", label: "ParseTransaction(raw)", detail: "must never panic; round-trips on success" },
-              { id: "crash", label: "Crasher found", detail: "e.g. amount \"50\" with no decimal point", tone: "danger" },
-              { id: "save", label: "Saved to testdata/fuzz", detail: "committed as a permanent regression test", tone: "success" },
-            ],
-            caption: "Untrusted upload text is exactly where fuzzing pays off: it finds the malformed line no test author imagined.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about fuzzing\" into \"I reach for a property test without thinking.\" Work across predicting what a fuzz test does under plain `go test`, reading a fuzz signature and a saved crasher file, implementing a round-trip fuzz test, designing a good property for a parser, and debugging a real crasher. Each produces a different kind of evidence — do them, don't just read them.",
-    },
     mastery: {
       body: "You've mastered this when you can explain the difference between the seed corpus and generated inputs and where crashers are saved, predict what a fuzz test does under `go test` versus `go test -fuzz`, write a FuzzXxx test that seeds with f.Add and asserts a round-trip or no-panic property with matching types, and choose a fuzz-friendly property for a parser and defend why it holds for every input. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Two ideas carry this lesson. **Fuzzing lets the machine pick the inputs** — you write `func FuzzXxx(f *testing.F)`, seed the corpus with `f.Add`, and assert a property inside `f.Fuzz` that must hold for every input; `go test -fuzz` then mutates your seeds into thousands of inputs hunting for a counterexample, while plain `go test` just runs the seed corpus. **Every crasher becomes permanent** — a discovered failure is saved to `testdata/fuzz/FuzzXxx/<hash>` and replayed by ordinary test runs forever, so bugs found once can't regress. The skill is picking the right property: no-panic, round-trip `Parse(Format(x)) == x`, or a differential check against a reference.",
+      body: "Two ideas carry this lesson. **Fuzzing lets the machine pick the inputs** — you write `func FuzzXxx(f *testing.F)`, seed the corpus with `f.Add`, and assert a property inside `f.Fuzz` that must hold for every input; `go test -fuzz` then mutates your seeds into thousands of inputs hunting for a counterexample, while plain `go test` just runs the seed corpus.\n\n**Every crasher becomes permanent** — a discovered failure is saved to `testdata/fuzz/FuzzXxx/<hash>` and replayed by ordinary test runs forever, so bugs found once can't regress. The skill is picking the right property: no-panic, round-trip `Parse(Format(x)) == x`, or a differential check against a reference.",
       blocks: [
         {
           type: "points",
