@@ -2,7 +2,16 @@
 
 > Scope note: from here on the **Go Runtime Lab** (`apps/go-learning`) and the **Backend Systems Atlas** (`apps/backend-learning`) are treated as **individual projects**. This document covers the Go Runtime Lab only. The Backend Atlas is untouched/deferred except for one type-safety fix noted below.
 
-Last updated: 2026-07-13.
+Last updated: 2026-07-15.
+
+> **2026-07-15 beginner simplification supersedes the old authoring model below.**
+> The Go course no longer contains LedgerFlow stages or metadata. The 16-stage
+> requirement was removed; lessons now render as four core chapters plus collapsed
+> optional depth. Repetitive naive/failure/intuition stages were removed, references
+> are optional, unit testing moved into fundamentals, and duplicate race-detector and
+> deep escape-analysis topics were removed from the visible curriculum. See
+> `docs/CONTENT_AUTHORING.md` for the current contract. Older progress notes remain as
+> historical context only.
 
 ---
 
