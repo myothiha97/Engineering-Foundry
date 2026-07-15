@@ -11,28 +11,23 @@ export const goCopySemantics: Lesson = {
   title: "Variables, assignment & copy semantics",
   description:
     "Learn when Go copies your data and when it shares it — the default is copy, and that surprises almost everyone.",
-  moduleId: "go-1",
+  moduleId: "go-2",
   estimatedMinutes: 55,
   difficulty: "beginner",
-  prerequisites: ["go-basic-types"],
+  prerequisites: ["go-structs-pointers"],
   learningObjectives: [
     "Explain why assignment and function arguments copy the value by default",
     "Predict whether a mutation is seen by the caller or silently lost",
     "Recognize how block scope and `:=` shadowing hide bugs",
   ],
   concepts: ["assignment", "copy-semantics", "scope", "shadowing"],
-  ledgerFlowApplications: [
-    "Avoid accidentally aliasing one transaction record into two places",
-    "Catch a mutation on a copy that silently does nothing to the stored record",
-    "Know when to pass a *Transaction pointer so an update actually persists",
-  ],
   references: [
     {
       title: "The Go Programming Language Specification — Assignability",
       url: "https://go.dev/ref/spec#Assignability",
       teaches: "The normative rules for what assignment does to a value.",
       relevance: "Grounds the 'assignment copies the value' rule in the language spec.",
-      required: true,
+      required: false,
       section: "Assignments; Assignability",
     },
     {
@@ -40,7 +35,7 @@ export const goCopySemantics: Lesson = {
       url: "https://go.dev/ref/spec#Declarations_and_scope",
       teaches: "How blocks create scopes and how an inner declaration shadows an outer one.",
       relevance: "The authoritative source for the scope and shadowing stages.",
-      required: true,
+      required: false,
       section: "Declarations and scope; Blocks",
     },
     {
@@ -77,7 +72,7 @@ export const goCopySemantics: Lesson = {
       starterCode:
         'package main\n\nimport "fmt"\n\ntype Transaction struct {\n  ID     string\n  Amount int\n}\n\n// zeroOut should reset the caller\'s transaction amount to 0.\nfunc zeroOut(t Transaction) {\n  t.Amount = 0\n}\n\nfunc main() {\n  tx := Transaction{ID: "a1", Amount: 500}\n  zeroOut(tx)\n  fmt.Println(tx.Amount) // want: 0\n}',
       expectedAnswer:
-        'func zeroOut(t *Transaction) {\n  t.Amount = 0\n}\n\n// call site: zeroOut(&tx)',
+        "func zeroOut(t *Transaction) {\n  t.Amount = 0\n}\n\n// call site: zeroOut(&tx)",
       hints: [
         "A value parameter is a copy; changes to it vanish when the function returns.",
         "Pass a pointer (*Transaction) and call with &tx so both names refer to the same record.",
@@ -101,8 +96,8 @@ export const goCopySemantics: Lesson = {
       id: "go1cs-design-boundary",
       type: "design",
       prompt:
-        "Decide whether LedgerFlow's `applyFee` should take a Transaction by value or by pointer, and state the evidence that would flip your choice.",
-      hints: ["Does the function need to change the caller's record, or just compute from it?"],
+        "Decide whether `renameTask` should take a Task by value or by pointer, and state the evidence that would flip your choice.",
+      hints: ["Does the function need to change the caller's task, or only create a changed copy?"],
     },
     {
       id: "go1cs-advanced-slice",
@@ -137,7 +132,7 @@ export const goCopySemantics: Lesson = {
     {
       id: "design-boundary",
       kind: "design",
-      description: "Defend a value-vs-pointer choice for a LedgerFlow function.",
+      description: "Defend a value-vs-pointer choice for a small function.",
       required: false,
     },
   ],
@@ -165,76 +160,6 @@ export const goCopySemantics: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The model most people carry over from other languages is: a variable *is* the data, so two names for it must point at the same thing. Under that model, `b := a` makes `b` another handle on `a`, and editing one edits both.\n\nIn Go that's only true for a few reference-like types. For plain values — numbers, strings, booleans, and **structs** (a struct is a bundle of named fields grouped into one value) — each variable owns its own bytes. Copying the value copies those bytes.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Two variables, two separate values",
-            language: "go",
-            code: 'a := 10\nb := a   // b gets a COPY of a\'s value\nb = 99\nfmt.Println(a, b) // prints: 10 99',
-            takeaway: "Changing `b` left `a` alone. `b := a` copied the number; it did not link them.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "A variable in Go holds a value, not a hidden reference to one.",
-            "Numbers, strings, booleans, arrays, and structs are copied on assignment.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The wrong model bites hardest at function boundaries. You pass a struct into a function, the function mutates it, and the change disappears the moment the function returns — because the function only ever touched its own parameter, which is a copy.\n\nThis is quiet. There's no compile error and no panic. The code reads as if it works, and it even 'works' if you inspect the value *inside* the function. The bug only shows up when the caller reads back what it expected to be updated.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "A mutation that silently does nothing",
-            language: "go",
-            code:
-              'type Transaction struct {\n    ID     string\n    Amount int\n}\n\nfunc settle(t Transaction) {\n    t.Amount = 0 // edits the COPY\n}\n\nfunc main() {\n    tx := Transaction{ID: "a1", Amount: 500}\n    settle(tx)\n    fmt.Println(tx.Amount) // prints: 500, not 0\n}',
-            takeaway: "`settle` received a copy of `tx`. Its write died with the copy when the function returned.",
-          },
-        },
-        {
-          type: "scenario",
-          scenario: {
-            title: "Works in the debugger, wrong in production",
-            context: "Inside settle, a print shows Amount is 0. After the call, the caller still sees 500.",
-            insight: "Both are true at once: the copy became 0, the original stayed 500. They were never the same value.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Replace the wrong picture with a clear one: every variable is its own box holding a value. Assignment and argument-passing **fill a new box by copying the bytes** from the old one. After that, the two boxes are independent — editing one never reaches into the other.\n\nSharing is the exception, and you ask for it explicitly with a **pointer** (a value that holds the *address* of another variable). Two names sharing one box means passing that address around, not the value.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "Copy fills a new box",
-            kind: "flow",
-            nodes: [
-              { id: "a", label: "a = 10", detail: "box A" },
-              { id: "copy", label: "b := a", detail: "copies the bytes", tone: "accent" },
-              { id: "b", label: "b = 10", detail: "box B, independent" },
-              { id: "edit", label: "b = 99", detail: "only box B changes", tone: "success" },
-            ],
-            caption: "Two boxes after the copy. A stays 10 no matter what happens to B.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Default: assignment and arguments copy the value into a fresh, independent box.",
-            "Exception: a pointer lets two names refer to the *same* box, so a change is shared.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
       body: "Hold one question in your head every time data moves: **copy or share?** Assignment (`=`, `:=`) and passing a plain value to a function are always *copy*. Passing a pointer (`&x` in, `*T` as the parameter type) is *share*.\n\nA useful default: if a function needs to *change* the caller's data, it must share (take a pointer). If it only needs to *read* the data, a copy is fine — and for small values, often clearer.",
       blocks: [
@@ -252,7 +177,8 @@ export const goCopySemantics: Lesson = {
               {
                 id: "share",
                 label: "Share (pointer)",
-                detail: "func(t *Transaction), called with &tx. Same box; changes are visible to the caller.",
+                detail:
+                  "func(t *Transaction), called with &tx. Same box; changes are visible to the caller.",
                 tone: "accent",
               },
             ],
@@ -276,9 +202,9 @@ export const goCopySemantics: Lesson = {
           example: {
             title: "Pointer parameter shares the box",
             language: "go",
-            code:
-              'func settle(t *Transaction) { // receives an ADDRESS, not a copy\n    t.Amount = 0              // writes through to the caller\'s box\n}\n\nfunc main() {\n    tx := Transaction{ID: "a1", Amount: 500}\n    settle(&tx)                // pass the address of tx\n    fmt.Println(tx.Amount)     // prints: 0\n}',
-            takeaway: "The address made `t` and `tx` two names for the same box, so the write stuck.",
+            code: 'func settle(t *Transaction) { // receives an ADDRESS, not a copy\n    t.Amount = 0              // writes through to the caller\'s box\n}\n\nfunc main() {\n    tx := Transaction{ID: "a1", Amount: 500}\n    settle(&tx)                // pass the address of tx\n    fmt.Println(tx.Amount)     // prints: 0\n}',
+            takeaway:
+              "The address made `t` and `tx` two names for the same box, so the write stuck.",
           },
         },
         {
@@ -303,7 +229,8 @@ export const goCopySemantics: Lesson = {
               {
                 id: "copyside",
                 label: "By value → two boxes",
-                detail: "settle(tx): tx and the parameter are separate. Writes to the parameter never reach tx.",
+                detail:
+                  "settle(tx): tx and the parameter are separate. Writes to the parameter never reach tx.",
                 tone: "muted",
               },
               {
@@ -313,7 +240,8 @@ export const goCopySemantics: Lesson = {
                 tone: "accent",
               },
             ],
-            caption: "Same function body, one word of difference at the boundary, opposite behavior.",
+            caption:
+              "Same function body, one word of difference at the boundary, opposite behavior.",
           },
         },
       ],
@@ -326,8 +254,7 @@ export const goCopySemantics: Lesson = {
           example: {
             title: "Read by value, mutate by pointer",
             language: "go",
-            code:
-              'type Transaction struct {\n    ID     string\n    Amount int\n}\n\n// Reads only — a copy is fine and cannot corrupt the original.\nfunc isLarge(t Transaction) bool {\n    return t.Amount > 1000\n}\n\n// Mutates — must share, so take a pointer.\nfunc applyFee(t *Transaction, fee int) {\n    t.Amount -= fee\n}\n\nfunc main() {\n    tx := Transaction{ID: "a1", Amount: 1500}\n    fmt.Println(isLarge(tx)) // true, tx unchanged\n    applyFee(&tx, 50)\n    fmt.Println(tx.Amount)   // 1450, change persisted\n}',
+            code: 'type Transaction struct {\n    ID     string\n    Amount int\n}\n\n// Reads only — a copy is fine and cannot corrupt the original.\nfunc isLarge(t Transaction) bool {\n    return t.Amount > 1000\n}\n\n// Mutates — must share, so take a pointer.\nfunc applyFee(t *Transaction, fee int) {\n    t.Amount -= fee\n}\n\nfunc main() {\n    tx := Transaction{ID: "a1", Amount: 1500}\n    fmt.Println(isLarge(tx)) // true, tx unchanged\n    applyFee(&tx, 50)\n    fmt.Println(tx.Amount)   // 1450, change persisted\n}',
             takeaway: "Match the parameter to intent: value to read, pointer to write.",
           },
         },
@@ -361,9 +288,9 @@ export const goCopySemantics: Lesson = {
           example: {
             title: "Shadowing hides a bug",
             language: "go",
-            code:
-              'var config *Config\nif enabled {\n    config, err := load() // := declares a NEW config, scoped to the if\n    if err != nil { return }\n    _ = config            // used here, then gone\n}\n// outer config is still nil here\nuse(config) // nil pointer — surprise',
-            takeaway: "The inner `config` shadowed the outer one. Use `=` (not `:=`) to assign the outer variable.",
+            code: "var config *Config\nif enabled {\n    config, err := load() // := declares a NEW config, scoped to the if\n    if err != nil { return }\n    _ = config            // used here, then gone\n}\n// outer config is still nil here\nuse(config) // nil pointer — surprise",
+            takeaway:
+              "The inner `config` shadowed the outer one. Use `=` (not `:=`) to assign the outer variable.",
           },
         },
       ],
@@ -397,44 +324,13 @@ export const goCopySemantics: Lesson = {
           type: "scenario",
           scenario: {
             title: "Designing applyFee",
-            context: "applyFee must reduce a transaction's stored amount so the change is persisted by the caller.",
-            insight: "Because it mutates the caller's record, it must take *Transaction. A value parameter would make it a silent no-op.",
+            context:
+              "applyFee must reduce a transaction's stored amount so the change is persisted by the caller.",
+            insight:
+              "Because it mutates the caller's record, it must take *Transaction. A value parameter would make it a silent no-op.",
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "In LedgerFlow this decides whether money math is real. A function that *computes* a projected balance from a transaction can take it by value — it only reads. A function that *applies* a fee or marks a transaction settled must take `*Transaction`, or the caller's stored record never changes and the ledger silently drifts from the truth.\n\nThe same care prevents accidental **aliasing**: if you copy a Transaction into a slice and later mutate the original expecting the slice entry to follow, it won't — they're separate copies. Deciding copy-or-share up front keeps each record's ownership clear.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "Read vs mutate in LedgerFlow",
-            kind: "compare",
-            nodes: [
-              { id: "read", label: "projectBalance(t Transaction)", detail: "reads only → by value is safe" },
-              {
-                id: "mutate",
-                label: "applyFee(t *Transaction)",
-                detail: "changes the stored record → must be a pointer",
-                tone: "accent",
-              },
-            ],
-            caption: "Choosing wrong here is a mutation that silently does nothing — the classic ledger bug.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Read-only money math → by value.",
-            "Persisting a change to a record → by pointer.",
-            "Copying a record into a collection does not link it to the original.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize this' into 'I can predict this'. Work across prediction, code-reading, implementation, debugging, refactoring, design, and one advanced slice puzzle. Each produces a different kind of evidence, so finishing one doesn't cover the others.",
     },
     mastery: {
       body: "You've mastered this when four signals hold: you can explain why the default is copy, correctly predict whether a struct mutation reaches the caller, convert a value parameter to a pointer so a change actually persists, and defend a value-vs-pointer choice for a real function. Check a criterion only when you genuinely have that evidence.",
@@ -448,7 +344,7 @@ export const goCopySemantics: Lesson = {
             "Default is copy: `b := a` and value parameters create independent boxes.",
             "Share on purpose with a pointer (`&x` in, `*T` parameter) when you must mutate the caller's data.",
             "Trap: `:=` inside a block shadows an outer variable instead of updating it.",
-            "Next up: pointers in full — how sharing actually works.",
+            "Next: see how slices can copy a small header while still sharing their elements.",
           ],
         },
       ],

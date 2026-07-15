@@ -11,37 +11,44 @@ export const goBasicTypes: Lesson = {
   slug: "basic-types",
   title: "Basic types, constants & zero values",
   description:
-    "Learn Go's numeric, string, and boolean types, the value every variable starts with, and the constant rules that stop whole classes of bugs.",
+    "Learn Go's basic types, how variable types can be written or inferred, zero values, and constant rules.",
   moduleId: "go-1",
   estimatedMinutes: 55,
   difficulty: "beginner",
   prerequisites: ["go-source-to-process"],
   learningObjectives: [
+    "Recognize Go's basic type families and the byte and rune aliases",
+    "Predict the type Go infers from a variable's initializer",
     "Predict the zero value of any basic type without running the code",
     "Explain how an untyped constant chooses a type when it meets a variable",
     "Convert between numeric types explicitly and say why Go refuses to do it for you",
   ],
-  concepts: ["types", "untyped-constants", "zero-values", "conversions"],
-  ledgerFlowApplications: [
-    "Choose int64 cents (never float64) to represent money exactly",
-    "Model account and transaction identifiers with a purpose-built string or int type",
-    "Rely on zero values so a freshly created record starts in a known, safe state",
+  concepts: [
+    "types",
+    "basic-type-families",
+    "type-inference",
+    "variable-declarations",
+    "untyped-constants",
+    "zero-values",
+    "conversions",
   ],
   references: [
     {
       title: "A Tour of Go: Basics",
       url: "https://go.dev/tour/basics",
-      teaches: "The basic types, variable declarations, zero values, and type conversions with runnable examples.",
+      teaches:
+        "The basic types, variable declarations, zero values, and type conversions with runnable examples.",
       relevance: "The gentlest official walkthrough of exactly the material in this lesson.",
-      required: true,
-      section: "Basic types; Zero values; Type conversions",
+      required: false,
+      section:
+        "Variables with initializers; Short variable declarations; Zero values; Type conversions",
     },
     {
       title: "Constants — The Go Blog",
       url: "https://go.dev/blog/constants",
       teaches: "Why Go has untyped constants and how they take on a type only when used.",
       relevance: "The authoritative explanation behind the untyped-constant stages of this lesson.",
-      required: true,
+      required: false,
       section: "The concept of untyped constants; Default type",
     },
     {
@@ -50,7 +57,7 @@ export const goBasicTypes: Lesson = {
       teaches: "The normative rule that every variable is initialized to its type's zero value.",
       relevance: "Confirms zero values are a language guarantee, not an accident of the compiler.",
       required: false,
-      section: "The zero value; Constants",
+      section: "The zero value; Constants; Iota",
     },
   ],
   exercises: [
@@ -59,15 +66,23 @@ export const goBasicTypes: Lesson = {
       type: "prediction",
       prompt:
         "Given `var count int`, `var name string`, `var active bool`, and `var ratio float64`, predict what each prints with fmt.Println before running it.",
-      expectedAnswer: "0, \"\" (an empty line), false, 0",
-      hints: ["No initializer means the zero value.", "The zero value of a string is the empty string, not nil."],
+      expectedAnswer: '0, "" (an empty line), false, 0',
+      hints: [
+        "No initializer means the zero value.",
+        "The zero value of a string is the empty string, not nil.",
+      ],
     },
     {
       id: "go1bt-read-constant",
       type: "code-reading",
       prompt:
-        "Read `const big = 1 << 40` followed by `var n int32 = big`. Explain whether this compiles, and what determines the answer.",
-      hints: ["Untyped constants are checked against the target type when assigned.", "How many bits does int32 hold?"],
+        'Read `var name = "myo"`, `age := 30`, and `var score float64 = 10`. State the type of each variable and explain where that type came from.',
+      expectedAnswer:
+        "name is string, inferred from the string initializer. age is int, inferred from the integer literal's default type. score is float64 because the declaration states that type explicitly and 10 fits it.",
+      hints: [
+        "A string literal defaults to string and an integer literal defaults to int when no other type is supplied.",
+        "An explicit type wins when the declaration includes one.",
+      ],
     },
     {
       id: "go1bt-implement-cents",
@@ -77,28 +92,40 @@ export const goBasicTypes: Lesson = {
       starterCode:
         'package main\n\nimport "fmt"\n\nfunc toCents(dollars int) int64 {\n  // return the amount expressed in cents\n  return 0\n}\n\nfunc main() { fmt.Println(toCents(3)) } // want: 300',
       expectedAnswer: "func toCents(dollars int) int64 { return int64(dollars) * 100 }",
-      hints: ["int and int64 are different types — convert explicitly.", "100 is an untyped constant, so it adapts to int64 for free."],
+      hints: [
+        "int and int64 are different types — convert explicitly.",
+        "100 is an untyped constant, so it adapts to int64 for free.",
+      ],
     },
     {
       id: "go1bt-debug-conversion",
       type: "debugging",
       prompt:
         "This does not compile: `var a int = 5` then `var b float64 = a * 2`. Explain the error and fix it without changing a's type.",
-      hints: ["Go never mixes numeric types in one expression implicitly.", "Wrap a in a conversion: float64(a)."],
+      hints: [
+        "Go never mixes numeric types in one expression implicitly.",
+        "Wrap a in a conversion: float64(a).",
+      ],
     },
     {
       id: "go1bt-refactor-money",
       type: "refactoring",
       prompt:
         "A balance is stored as `var balance float64`. Refactor the type and any arithmetic so money is represented exactly, and explain what breaks if you leave it as float64.",
-      hints: ["Integer cents avoid binary-fraction rounding.", "0.1 + 0.2 is not exactly 0.3 in float64."],
+      hints: [
+        "Integer cents avoid binary-fraction rounding.",
+        "0.1 + 0.2 is not exactly 0.3 in float64.",
+      ],
     },
     {
       id: "go1bt-design-id",
       type: "design",
       prompt:
-        "Choose a base type for a LedgerFlow account identifier (numeric counter vs opaque string) and state what evidence would make you switch.",
-      hints: ["Do you ever do arithmetic on an ID?", "Will IDs come from an external system or database sequence?"],
+        "Choose a base type for a user identifier (numeric counter vs opaque string) and state what evidence would make you switch.",
+      hints: [
+        "Do you ever do arithmetic on an ID?",
+        "Will IDs come from an external system or database sequence?",
+      ],
     },
     {
       id: "go1bt-advanced-precision",
@@ -110,9 +137,17 @@ export const goBasicTypes: Lesson = {
   ],
   masteryCriteria: [
     {
+      id: "predict-inference",
+      kind: "predict",
+      description:
+        "Predict the type produced by `var name = value` and `name := value`, and explain that the type stays fixed.",
+      required: true,
+    },
+    {
       id: "explain-untyped",
       kind: "explain",
-      description: "Explain in plain words what an untyped constant is and when it acquires a type.",
+      description:
+        "Explain in plain words what an untyped constant is and when it acquires a type.",
       required: true,
     },
     {
@@ -124,18 +159,20 @@ export const goBasicTypes: Lesson = {
     {
       id: "implement-conversion",
       kind: "implement",
-      description: "Write code that converts between numeric types explicitly and compiles cleanly.",
+      description:
+        "Write code that converts between numeric types explicitly and compiles cleanly.",
       required: true,
     },
     {
       id: "design-money-type",
       kind: "design",
-      description: "Defend a base-type choice for money and identifiers in LedgerFlow.",
+      description: "Defend a base-type choice for a quantity and an identifier.",
       required: false,
     },
   ],
   sections: {
     problem: {
+      title: "Why Go cares about types",
       body: "Every program is, at bottom, values moving around: a count, a name, a price, a yes/no flag. Before you can do anything useful in Go, you have to say what *kind* of value each thing is — its **type**. A type is a promise about what a value can hold and what you're allowed to do with it.\n\nBeginners coming from languages like Python or JavaScript often expect Go to be flexible: mix an integer and a decimal, and it'll 'just figure it out'. Go deliberately doesn't. It picks a small set of clear rules up front, and those rules stop a whole category of quiet bugs — the kind where a number is silently rounded or a currency ends up a penny short.",
       blocks: [
         {
@@ -156,77 +193,8 @@ export const goBasicTypes: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "Here's the model many newcomers bring: 'a number is a number, and Go will convert whenever it needs to.' So they write an `int` next to a `float64` and expect it to work.\n\nIt doesn't compile. Go treats `int`, `int64`, and `float64` as genuinely different types, and it will never mix them in an expression without you asking. The second wrong assumption is subtler: people think a variable with no value is somehow 'empty' or 'undefined' the way it is in JavaScript. In Go there is no undefined — an uninitialized variable already holds a well-defined **zero value**.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Mixing number types is a compile error",
-            language: "go",
-            code: 'var count int = 3\nvar rate float64 = 1.5\n\n// total := count * rate  // does NOT compile:\n// invalid operation: mismatched types int and float64',
-            takeaway: "int and float64 are separate types. Go stops here rather than guessing how to combine them.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "There is no implicit numeric conversion — not even int → int64.",
-            "There is no 'undefined': a declared variable always has a value.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The most expensive version of this mistake is money. It's tempting to store a price as `float64` because prices have decimal points. But `float64` stores numbers in binary fractions, and most decimal amounts — like 0.10 — cannot be represented exactly. The tiny errors are invisible in one calculation and disastrous after thousands.\n\nThis is not a Go quirk; it's how floating-point works everywhere. The failure is choosing the wrong base type for the job. The fix is to pick a type that represents your values *exactly*, which for money means whole units — cents as an integer.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "float64 cannot hold 0.10 exactly",
-            language: "go",
-            code: 'fmt.Printf("%.17f\\n", 0.1+0.2)\n// prints: 0.30000000000000004\n// not 0.30000000000000000',
-            takeaway: "Adding money as float64 accumulates rounding error. A ledger built on this will slowly disagree with itself.",
-          },
-        },
-        {
-          type: "scenario",
-          scenario: {
-            title: "The balance that drifts",
-            context:
-              "A wallet stores its balance as float64 and adds many small transactions. After a few thousand entries the displayed total is off by a cent, and it never reconciles against the bank statement.",
-            insight: "No single line is 'wrong' — the base type simply can't represent the values exactly. Integer cents would have stayed exact.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Let's replace the guesswork with a simple picture. Go's basic types fall into a few families, and you mostly reach for one obvious member of each.\n\nFor whole numbers use `int` (Go's default integer, sized to the machine). For amounts that truly need a fraction, like a physics measurement, use `float64`. For text use `string`. For yes/no use `bool`. Everything else — `int32`, `uint8`, `float32` — is a specialized variant you choose only when you have a specific reason, such as matching a fixed storage size.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "The families of basic types",
-            kind: "compare",
-            nodes: [
-              { id: "ints", label: "Integers", detail: "int (default), int8/16/32/64, uint... — whole numbers" },
-              { id: "floats", label: "Floating point", detail: "float64 (default), float32 — fractional numbers" },
-              { id: "strings", label: "Strings", detail: "string — immutable UTF-8 text" },
-              { id: "bools", label: "Booleans", detail: "bool — true or false", tone: "accent" },
-            ],
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Reach for `int`, `float64`, `string`, `bool` by default.",
-            "Sized types (`int32`, `uint8`, …) are for specific storage or protocol needs.",
-            "For money, prefer an integer count of the smallest unit (cents) — not a float.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
+      title: "Variables, zero values & constants",
       body: "Keep two ideas in your head and most of this lesson follows from them.\n\nFirst, **every variable starts at its zero value** — the type's natural 'nothing yet'. Numbers start at `0`, strings at `\"\"` (empty), booleans at `false`. You never read garbage. Second, **a plain literal like `42` or `3.14` is an *untyped constant*** — a value that has no fixed type until you use it somewhere. When it meets a variable, it *becomes* that variable's type if it fits. This is why `var x float64 = 42` is fine even though `42` looks like an integer: the untyped constant `42` happily becomes a `float64`.",
       blocks: [
         {
@@ -238,19 +206,66 @@ export const goBasicTypes: Lesson = {
           },
         },
         {
+          type: "note",
+          note: {
+            tone: "info",
+            title: "Go can infer a variable's type",
+            text: '`var name = "myo"` infers `string` from the initializer. Inside a function, `name := "myo"` is shorthand for the same declaration. The inferred type is still fixed; `name` cannot later hold an `int`.',
+          },
+        },
+        {
           type: "example",
           example: {
             title: "One constant, several types",
             language: "go",
-            code: 'const answer = 42     // untyped: no type yet\n\nvar i int = answer     // becomes int\nvar f float64 = answer // becomes float64\nvar b byte = answer    // becomes byte (uint8) — fits in 0..255',
-            takeaway: "The single constant 42 takes on a different type at each use. A typed variable could not do this.",
+            code: "const answer = 42     // untyped: no type yet\n\nvar i int = answer     // becomes int\nvar f float64 = answer // becomes float64\nvar b byte = answer    // becomes byte (uint8) — fits in 0..255",
+            takeaway:
+              "The single constant 42 takes on a different type at each use. A typed variable could not do this.",
           },
         },
       ],
     },
     mechanics: {
-      body: "Now the precise rules. When you write `var x int`, Go reserves storage and sets it to the zero value; declaring and leaving it is completely safe. When you write a literal, it is an **untyped constant** carrying a *default type* (integers default to `int`, floats to `float64`, text to `string`, `true`/`false` to `bool`). The default type is used only when the context can't tell Go what to make it — for example `x := 42` gives `x` the type `int`.\n\nWhen an untyped constant is assigned to a typed variable, Go checks it *fits* that type. `var b uint8 = 255` is fine; `var b uint8 = 256` is a compile-time error, because 256 doesn't fit in 8 bits. This checking happens while compiling, so overflow bugs of this kind can't reach runtime.",
+      title: "Declaring variables and choosing types",
+      body: "Go variables always have one fixed type, but you do not always have to write that type yourself. You can state it explicitly, let Go infer it from the value on the right, or use the shorter `:=` form inside a function.",
       blocks: [
+        {
+          type: "example",
+          example: {
+            title: "Four common declaration forms",
+            language: "go",
+            code: 'var name string = "myo" // explicit type: string\nvar city = "Bangkok"     // inferred type: string\nage := 30                 // inferred type: int; inside functions only\nvar count int             // no value supplied, so count starts at 0',
+            takeaway:
+              "name and city are both strings, and age is an int. Inference saves typing; it does not make the variable dynamically typed.",
+          },
+        },
+        {
+          type: "note",
+          note: {
+            tone: "tip",
+            title: "Start with four everyday types",
+            text: "Use `bool` for true/false, `string` for text, `int` for ordinary whole numbers, and `float64` for ordinary decimal calculations. These cover most beginner programs.",
+          },
+        },
+        {
+          type: "points",
+          items: [
+            "Signed integers: `int`, `int8`, `int16`, `int32`, `int64` — they can be negative.",
+            "Unsigned integers: `uint`, `uint8`, `uint16`, `uint32`, `uint64`, `uintptr` — they cannot be negative.",
+            "Floating point: `float32`, `float64`. An inferred decimal such as `rate := 1.5` becomes `float64`.",
+            "Aliases: `byte` means `uint8`; `rune` means `int32` and represents a Unicode code point.",
+            "Complex numbers: `complex64`, `complex128`. They exist for specialized numeric work and can wait until you actually need them.",
+            "Use an exact-sized type when a protocol, file format, database column, or numeric range requires it; otherwise prefer `int` or `float64`.",
+          ],
+        },
+        {
+          type: "note",
+          note: {
+            tone: "info",
+            title: "Constants follow a different rule",
+            text: "A `const` value is fixed and computable at compile time. A plain constant such as `42` starts untyped: it can become an `int`, `float64`, or another numeric type when used, as long as the value fits. With no target type, an integer defaults to `int`, a decimal to `float64`, text to `string`, and a boolean to `bool`.",
+          },
+        },
         {
           type: "diagram",
           diagram: {
@@ -259,10 +274,21 @@ export const goBasicTypes: Lesson = {
             nodes: [
               { id: "lit", label: "literal 42", detail: "untyped constant" },
               { id: "ctx", label: "used where?", detail: "assigned / passed / :=" },
-              { id: "fit", label: "does it fit?", detail: "range checked at compile time", tone: "accent" },
-              { id: "typed", label: "typed value", detail: "int, float64, byte, …", tone: "success" },
+              {
+                id: "fit",
+                label: "does it fit?",
+                detail: "range checked at compile time",
+                tone: "accent",
+              },
+              {
+                id: "typed",
+                label: "typed value",
+                detail: "int, float64, byte, …",
+                tone: "success",
+              },
             ],
-            caption: "If the context gives no type, the constant falls back to its default type (int for 42).",
+            caption:
+              "If the context gives no type, the constant falls back to its default type (int for 42).",
           },
         },
         {
@@ -271,20 +297,33 @@ export const goBasicTypes: Lesson = {
             title: "Zero values and fit-checking",
             language: "go",
             code: 'var count int      // 0\nvar label string   // "" (empty string)\nvar ok bool        // false\nvar ratio float64  // 0\n\nvar small uint8 = 255 // ok\n// var big uint8 = 256 // compile error: constant 256 overflows uint8',
-            takeaway: "Zero values are guaranteed, and a constant that can't fit its target is rejected before the program ever runs.",
+            takeaway:
+              "Zero values are guaranteed, and a constant that can't fit its target is rejected before the program ever runs.",
+          },
+        },
+        {
+          type: "example",
+          example: {
+            title: "iota numbers related constants",
+            language: "go",
+            code: "const (\n    StatusPending = iota // 0\n    StatusReady          // 1\n    StatusDone           // 2\n)",
+            takeaway:
+              "iota advances once per line inside this const block. It creates constants at compile time; it is not a counter that changes while the program runs.",
           },
         },
         {
           type: "points",
           items: [
-            "Default types: integer → `int`, floating → `float64`, text → `string`, boolean → `bool`.",
-            "`:=` uses the constant's default type (`n := 42` makes `n` an `int`).",
+            "Use `:=` for obvious local values; use `var x T` when the explicit type or its zero value matters.",
+            "An inferred variable still has a fixed type and cannot later hold a different kind of value.",
+            "A constant adopts the surrounding type when it fits; otherwise the compiler rejects it.",
             "A constant that doesn't fit its target type is a compile-time error, not a runtime surprise.",
           ],
         },
       ],
     },
     diagram: {
+      title: "Zero values at a glance",
       body: "Let's picture what a variable actually is: a labelled box with a type and a current value. The moment you declare it, the box exists and holds the zero value — even before you assign anything. Select a box below to see its type, its zero value, and what it can hold.",
       blocks: [
         {
@@ -295,16 +334,23 @@ export const goBasicTypes: Lesson = {
             nodes: [
               { id: "int", label: "var count int", detail: "zero value: 0" },
               { id: "float", label: "var ratio float64", detail: "zero value: 0" },
-              { id: "string", label: "var name string", detail: "zero value: \"\" (empty)", tone: "accent" },
+              {
+                id: "string",
+                label: "var name string",
+                detail: 'zero value: "" (empty)',
+                tone: "accent",
+              },
               { id: "bool", label: "var active bool", detail: "zero value: false" },
             ],
-            caption: "No initializer needed — declaring a variable already fills its box with the type's zero value.",
+            caption:
+              "No initializer needed — declaring a variable already fills its box with the type's zero value.",
           },
         },
       ],
     },
     implementation: {
-      body: "In practice you'll spend most of your effort on two moves: declaring variables (and leaning on their zero values) and converting between numeric types on purpose. Conversion uses the syntax `T(value)` — the type name followed by the value in parentheses. This is the explicit request Go requires before it will treat one number type as another.",
+      title: "Converting between number types",
+      body: "In practice you'll spend most of your effort on two moves: declaring variables (often letting Go infer the obvious type) and converting between numeric types on purpose. Conversion uses the syntax `T(value)` — the type name followed by the value in parentheses. This is the explicit request Go requires before it will treat one number type as another.",
       blocks: [
         {
           type: "example",
@@ -312,7 +358,8 @@ export const goBasicTypes: Lesson = {
             title: "Explicit conversion, done on purpose",
             language: "go",
             code: 'package main\n\nimport "fmt"\n\nfunc main() {\n    var count int = 3\n    var rate float64 = 1.5\n\n    total := float64(count) * rate // convert count first\n    fmt.Println(total)             // 4.5\n\n    cents := int64(count) * 100    // int -> int64 on purpose\n    fmt.Println(cents)             // 300\n}',
-            takeaway: "`float64(count)` and `int64(count)` are you telling Go exactly which type to use. Nothing is converted behind your back.",
+            takeaway:
+              "`float64(count)` and `int64(count)` are you telling Go exactly which type to use. Nothing is converted behind your back.",
           },
         },
         {
@@ -326,9 +373,11 @@ export const goBasicTypes: Lesson = {
       ],
     },
     experiment: {
-      body: "Before reading on, commit to a prediction — a corrected wrong guess teaches more than a right answer you skimmed. Consider this code:\n\n`const c = 10` then `var x float64 = c / 4`.\n\nWill `x` be `2` or `2.5`? Decide now, then reveal.\n\nThe answer is **2** — and it surprises almost everyone. Both `c` and `4` are *untyped integer* constants, so `c / 4` is computed first, as **integer constant arithmetic**: `10 / 4` truncates to `2`. Only then does that finished result become a `float64`. The target type converts the answer; it does not reach inside the expression and change how the division ran. To keep the fraction, put a float in the expression: `var x float64 = c / 4.0` gives `2.5`, because one float-kind operand promotes the whole constant division to floating-point. That's the precise sense in which untyped constants 'bend to context': each constant adapts to where it's *used* — but an all-integer expression still does integer math.",
+      title: "When integer division happens",
+      body: "Before reading on, commit to a prediction — a corrected wrong guess teaches more than a right answer you skimmed. Consider this code:\n\n`const c = 10` then `var x float64 = c / 4`.\n\nWill `x` be `2` or `2.5`? Decide now, then reveal.\n\nThe answer is **2** — and it surprises almost everyone. Both `c` and `4` are *untyped integer* constants, so `c / 4` is computed first, as **integer constant arithmetic**: `10 / 4` truncates to `2`. Only then does that finished result become a `float64`. The target type converts the answer; it does not reach inside the expression and change how the division ran.\n\nTo keep the fraction, put a float in the expression: `var x float64 = c / 4.0` gives `2.5`, because one float-kind operand promotes the whole constant division to floating-point. That's the precise sense in which untyped constants 'bend to context': each constant adapts to where it's *used* — but an all-integer expression still does integer math.",
     },
     "failure-cases": {
+      title: "Common type and conversion mistakes",
       body: "Most type bugs at this level come from a handful of recurring mistakes. Here are the ones you'll actually meet, and the signal each gives you.",
       blocks: [
         {
@@ -338,7 +387,7 @@ export const goBasicTypes: Lesson = {
             "**float64 for money** → slow rounding drift that never reconciles. Use integer cents.",
             "**Constant overflow** → `constant N overflows T` at compile time. The value doesn't fit the target.",
             "**Expecting rounding on float→int** → `int(2.9)` is `2`, not `3`; conversion truncates.",
-            "**Assuming a variable is nil/undefined** → it's actually the zero value; `\"\"` and `0` are real, usable values.",
+            '**Assuming a variable is nil/undefined** → it\'s actually the zero value; `""` and `0` are real, usable values.',
           ],
         },
         {
@@ -346,13 +395,15 @@ export const goBasicTypes: Lesson = {
           example: {
             title: "Truncation, not rounding",
             language: "go",
-            code: 'fmt.Println(int(2.9))  // 2, not 3\nfmt.Println(int(-2.9)) // -2  (toward zero)',
-            takeaway: "Converting a float to an int throws the fraction away. If you want rounding, use math.Round first.",
+            code: "fmt.Println(int(2.9))  // 2, not 3\nfmt.Println(int(-2.9)) // -2  (toward zero)",
+            takeaway:
+              "Converting a float to an int throws the fraction away. If you want rounding, use math.Round first.",
           },
         },
       ],
     },
     "trade-offs": {
+      title: "Choosing the right number type",
       body: "Type choices come with costs, and the right answer depends on what you're modelling. The goal is a choice you can defend, plus the evidence that would change your mind.",
       blocks: [
         {
@@ -367,11 +418,13 @@ export const goBasicTypes: Lesson = {
       ],
     },
     design: {
-      body: "Turn the rules into durable habits. Default to the plain types (`int`, `string`, `bool`) and only reach for sized variants when a real constraint demands it. Represent money as an integer count of the smallest unit, never `float64`. Lean on zero values so a freshly declared value is already in a safe, known state. And keep every numeric conversion explicit so the reader can see exactly where a type changes.",
+      title: "Practical type choices",
+      body: "Turn the rules into durable habits. Inside a function, use `:=` when the initializer makes the type obvious; use `var x T` when the zero value or explicit type matters. At package level, use `var` because `:=` is not allowed. Default to the plain types (`int`, `string`, `bool`) and only reach for sized variants when a real constraint demands it. Keep every numeric conversion explicit.",
       blocks: [
         {
           type: "points",
           items: [
+            "Use `:=` for obvious local initialization; use `var` for package variables and intentional zero values.",
             "Prefer `int`, `string`, `bool`; justify any sized type.",
             "Money is integer cents (or a decimal type) — never float64.",
             "Design so the zero value is a valid, usable default.",
@@ -381,47 +434,32 @@ export const goBasicTypes: Lesson = {
           type: "scenario",
           scenario: {
             title: "A struct that's safe before it's filled",
-            context: "A new Account is created with no fields set yet. Its balance-in-cents is int64, so it starts at 0 — an accurate empty balance.",
-            insight: "Because the zero value is meaningful, you don't need special 'uninitialized' handling. The type does that work for you.",
+            context:
+              "A new Account is created with no fields set yet. Its balance-in-cents is int64, so it starts at 0 — an accurate empty balance.",
+            insight:
+              "Because the zero value is meaningful, you don't need special 'uninitialized' handling. The type does that work for you.",
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "Here's the whole lesson applied to the project you'll build. LedgerFlow tracks money, so its most important type decision is how to represent an amount. It stores every amount as an `int64` number of **cents**, so arithmetic is exact and totals always reconcile. Identifiers are kept as their own string-based type so no one can accidentally add two account IDs together. And because Go guarantees zero values, a newly created transaction starts with an amount of `0` and an empty description — a safe, predictable starting point.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Money as exact integer cents",
-            language: "go",
-            code: 'type AccountID string       // opaque: no arithmetic on IDs\n\ntype Transaction struct {\n    ID       AccountID\n    AmountC  int64  // amount in cents, exact\n    Note     string // zero value "" is fine\n}\n\n// $12.34 is stored as:\nvar t Transaction\nt.AmountC = 1234 // twelve dollars and thirty-four cents',
-            takeaway: "Cents-as-int64 keeps every balance exact; a distinct ID type stops meaningless math on identifiers.",
-          },
-        },
-        {
-          type: "points",
-          items: ["Amounts: `int64` cents, exact and reconcilable.", "IDs: a named string type, never arithmetic.", "New records rely on zero values for a safe initial state."],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize this' into 'I can predict and build this'. Work across prediction, code-reading, implementation, debugging, refactoring, and design — each produces a different kind of evidence, so finishing one doesn't cover the rest.",
     },
     mastery: {
-      body: "You've mastered this lesson when you can do four things without notes: explain what an untyped constant is and when it gets a type, predict any basic type's zero value, write correct explicit conversions, and defend a base-type choice for money and IDs. Check a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
+      title: "What you should be able to do",
+      body: "You've mastered this lesson when you can recognize the basic type families, predict an inferred variable type, explain what an untyped constant is and when it gets a type, predict any basic type's zero value, and write correct explicit conversions.",
     },
     summary: {
-      body: "Two ideas carry this whole lesson: **variables start at their zero value**, and **untyped constants have no type until they're used**. Keep those straight and Go's number rules stop feeling strict and start feeling predictable.",
+      title: "Types, constants & zero values: recap",
+      body: "Three ideas carry this lesson: **a variable's type may be written or inferred**, **a declaration without an initializer uses the zero value**, and **an untyped constant gets a type from its context**.",
       blocks: [
         {
           type: "points",
           items: [
-            "Zero values: `0`, `\"\"`, `false` — always defined, never garbage.",
+            '`var name = "myo"` and `name := "myo"` infer `string`; the type remains fixed.',
+            "Go's basic families are booleans, strings, integers, floats, and complex numbers; byte and rune are integer aliases.",
+            'Zero values: `0`, `""`, `false` — always defined, never garbage.',
             "Untyped constants adopt the type of the context they're used in (or their default type).",
             "Go never converts numeric types implicitly — write `T(value)`.",
             "Money is integer cents, not float64.",
-            "Next up: composite values and how Go copies them.",
+            "Next: use these values as function inputs and results.",
           ],
         },
       ],
