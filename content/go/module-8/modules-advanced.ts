@@ -26,11 +26,6 @@ export const goModulesAdvanced: Lesson = {
     "Use replace, vendoring and retract correctly, and cut an immutable tagged release without ever deleting a published tag",
   ],
   concepts: ["semver", "replace", "vendoring", "retract"],
-  ledgerFlowApplications: [
-    "Cut a reproducible, versioned LedgerFlow release by tagging a commit and verifying it builds from a clean checkout",
-    "Use a replace directive during local multi-module development, then remove it before publishing so downstream builds are not broken",
-    "Vendor dependencies into the repository when LedgerFlow needs a hermetic, offline-reproducible build in CI",
-  ],
   references: [
     {
       title: "Go Modules Reference",
@@ -39,7 +34,7 @@ export const goModulesAdvanced: Lesson = {
         "The normative rules for go.mod directives (require, replace, exclude, retract), semantic import versioning, go.sum, the module proxy and Minimal Version Selection.",
       relevance:
         "The authoritative source for every mechanism in this lesson; settles edge cases the prose only summarises.",
-      required: true,
+      required: false,
       section: "Versions & MVS",
     },
     {
@@ -49,7 +44,7 @@ export const goModulesAdvanced: Lesson = {
         "How major/minor/patch map to Go modules, the meaning of each bump, pre-release and pseudo-versions, and the +incompatible marker.",
       relevance:
         "Grounds the semver section in the official rules for choosing and reading version numbers.",
-      required: true,
+      required: false,
       section: "Semantic versioning",
     },
     {
@@ -59,7 +54,7 @@ export const goModulesAdvanced: Lesson = {
         "How to tag and publish a release so `go get` and the proxy can find it, including the /vN path requirement for v2+.",
       relevance:
         "Directly supports the release workflow this lesson ends on — tagging, publishing, and versioned import paths.",
-      required: true,
+      required: false,
       section: "Releasing",
     },
     {
@@ -126,7 +121,7 @@ export const goModulesAdvanced: Lesson = {
       id: "go8mv-debug-badtag",
       type: "debugging",
       prompt:
-        "You published v1.5.0 an hour ago and discover it corrupts data. A teammate says \"just delete the v1.5.0 tag and re-push a fixed one under the same name.\" Explain why that is the wrong move and what to do instead.",
+        'You published v1.5.0 an hour ago and discover it corrupts data. A teammate says "just delete the v1.5.0 tag and re-push a fixed one under the same name." Explain why that is the wrong move and what to do instead.',
       expectedAnswer:
         "Deleting and re-pushing a tag breaks immutability. The module proxy (proxy.golang.org) and the checksum database have already cached v1.5.0 with a specific content hash; a different commit under the same tag now mismatches that hash, so anyone who fetched the original gets checksum-mismatch errors and the ecosystem sees two different v1.5.0s. The correct move is: never reuse a version number. Publish a fixed release with a NEW, higher version (v1.5.1), and add a `retract v1.5.0` directive to the module's go.mod so tooling steers users away from the bad release while it still exists for anyone who already depends on it.",
       hints: [
@@ -191,14 +186,14 @@ export const goModulesAdvanced: Lesson = {
   ],
   sections: {
     problem: {
-      body: "You already know how to *use* modules: `go.mod` lists what your code needs, `go.sum` records exact checksums, and `go get` downloads dependencies. That is enough to build a program. But the moment you *ship* something other people depend on — a library, or a service that others build against — a new set of questions appears. If I change my code, how do users know whether it's safe to upgrade? What number do I give this release? If I need to make a breaking change, how do I do it without breaking everyone at once? And how does anyone rebuild the exact same thing I built, months later?\n\nThis is the discipline of versioning and release. Go answers it with a small, opinionated set of rules — semantic versioning, versioned import paths, a checksum database, and a deliberately boring dependency-selection algorithm — that together make builds reproducible and upgrades predictable. Getting these rules right is what separates a library people trust from one that breaks their build.",
+      body: "You already know how to *use* modules: `go.mod` lists what your code needs, `go.sum` records exact checksums, and `go get` downloads dependencies. That is enough to build a program. But the moment you *ship* something other people depend on — a library, or a service that others build against — a new set of questions appears. If I change my code, how do users know whether it's safe to upgrade?\n\nWhat number do I give this release? If I need to make a breaking change, how do I do it without breaking everyone at once? And how does anyone rebuild the exact same thing I built, months later?\n\nThis is the discipline of versioning and release. Go answers it with a small, opinionated set of rules — semantic versioning, versioned import paths, a checksum database, and a deliberately boring dependency-selection algorithm — that together make builds reproducible and upgrades predictable. Getting these rules right is what separates a library people trust from one that breaks their build.",
       blocks: [
         {
           type: "note",
           note: {
             tone: "analogy",
             title: "Analogy",
-            text: "A version number is a promise printed on the box. Patch says \"same product, fixed a defect.\" Minor says \"same product, now with extra features you can ignore.\" Major says \"this is a different product — read the label before you swap it in.\" Everything in this lesson is about keeping those promises honest so callers can trust the number without reading your code.",
+            text: 'A version number is a promise printed on the box. Patch says "same product, fixed a defect." Minor says "same product, now with extra features you can ignore." Major says "this is a different product — read the label before you swap it in." Everything in this lesson is about keeping those promises honest so callers can trust the number without reading your code.',
           },
         },
         {
@@ -211,68 +206,8 @@ export const goModulesAdvanced: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The natural first instinct, coming from other ecosystems, is to treat version numbers as marketing: bump whatever feels right, publish, and if something goes wrong just delete the tag and push a corrected one. And when you need a breaking change, the instinct is simply to increment to v2.0.0 and tag it — done.\n\nBoth instincts quietly violate Go's rules. Version numbers here are a strict contract, not a mood; a published version is *immutable* and cannot be quietly replaced; and a v2 that keeps the same import path is not a valid v2 at all. These aren't style preferences — break them and downstream builds fail with checksum errors or unresolved imports.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "The tempting-but-wrong \"fix a bad release\" move",
-            language: "bash",
-            code:
-              "# Published v1.5.0, found a bug an hour later. The WRONG fix:\ngit tag -d v1.5.0            # delete the tag locally\ngit push origin :v1.5.0      # delete it on the remote\ngit tag v1.5.0 <fixed-commit># reuse the SAME number for different code\ngit push origin v1.5.0\n# Downstream users who already fetched v1.5.0 now get:\n#   verifying module: checksum mismatch\n#     downloaded: h1:AAAA...\n#     go.sum:     h1:BBBB...",
-            takeaway:
-              "Reusing a version number for different content breaks immutability. The proxy and checksum database already recorded the old hash — the new content no longer matches it.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Version numbers are a contract, not a vibe — the bump must match what actually changed.",
-            "A published version is immutable; you cannot re-point a tag at different code.",
-            "\"Just bump to v2.0.0\" without changing the import path is not a valid v2 (you'll see why soon).",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The failure is delayed and lands on other people. Your own machine is fine — you built from a tag, it worked, you moved on. The pain appears downstream: a user who pinned your bad tag gets a checksum mismatch and their CI goes red; a user who tries your \"v2\" finds the new API doesn't exist at the path they imported; a user who upgraded one dependency discovers, to their confusion, that a totally unrelated dependency also moved.\n\nThe root cause of most of these is a single rule you must internalise: **the same import path must stay backward compatible forever.** Everything else — why v2 needs a new path, why you never delete a tag, why builds are reproducible — falls out of protecting that promise.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The v2 that nobody can import",
-            context:
-              "A team ships a breaking redesign of github.com/acme/money. They tag it v2.0.0 but leave `module github.com/acme/money` unchanged in go.mod. Their own tests pass. Downstream users run `go get github.com/acme/money@v2.0.0`, and either it silently resolves to the old v1 API or fails with the new symbols missing. Nobody can actually use the new version.",
-            insight:
-              "The import path never changed, so from the module system's point of view v2.0.0 is not a legitimate new major version of that path — it can only appear via the `+incompatible` fallback and can't carry a clean new API. A real v2 must live at `github.com/acme/money/v2`. The path IS the version boundary.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental image that ties it all together. Think of an import path as a street address. Everyone who imports `github.com/acme/money` is mailing letters to that address, and they expect the building there to keep working the way it always has. Patch and minor releases are *renovations inside the building* — the address is unchanged and your mail still arrives; you might get new rooms (minor) or a fixed leaky pipe (patch), but nothing you relied on is gone.\n\nA breaking change is a *different building*. You cannot renovate the old one into something incompatible while people are still mailing letters to it — you'd lose their mail. So Go makes you build at a new address: `github.com/acme/money/v2`. Old users keep writing to the v1 address; new users write to the v2 address; both buildings can stand at the same time. That's the whole idea behind Semantic Import Versioning — the version lives *in the address* so incompatible versions never collide.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "The one rule everything rests on",
-            text: "The import compatibility rule: \"If an old package and a new package have the same import path, the new package must be backward compatible with the old one.\" Backward-compatible changes keep the path. Breaking changes must change the path. That single rule explains semver's major bump, the /vN requirement, and why deleting a tag is forbidden.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "An import path is an address callers rely on staying compatible.",
-            "Patch/minor = renovations at the same address; callers are unaffected.",
-            "Major/breaking = a new address (/v2, /v3) so old and new coexist without colliding.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "Now attach numbers to the buildings. A Go module version is `vMAJOR.MINOR.PATCH`, e.g. `v1.4.2`. Each position is a specific promise:\n\n- **PATCH** (v1.4.2 → v1.4.3): bug fixes only. No new features, no changed behavior that callers can observe. Always safe to take.\n- **MINOR** (v1.4.2 → v1.5.0): backward-compatible *additions* — new functions, new types, new optional behavior. Existing code still compiles and behaves the same. Safe to take. PATCH resets to 0.\n- **MAJOR** (v1.4.2 → v2.0.0): a *breaking* change — something callers relied on was removed or changed. NOT automatically safe; the caller must read the changelog and migrate. MINOR and PATCH reset to 0, and (in Go) the import path gains `/v2`.\n\nThe key mental shift from some other ecosystems: in Go the major version is part of the module's *identity*, not just a label. `v0.x.y` is the exception — it means \"unstable, anything can change,\" so a v0 minor bump is allowed to break you.",
+      body: "A Go module version has the form `vMAJOR.MINOR.PATCH`, for example `v1.4.2`. Each number communicates a different kind of change.\n\nA **PATCH** release (`v1.4.2` → `v1.4.3`) fixes bugs while intending to preserve compatibility. A release can still contain mistakes, so the number is a promise rather than proof.\n\nA **MINOR** release (`v1.4.2` → `v1.5.0`) adds backward-compatible features. Existing callers should continue to compile and behave the same; the patch number resets to zero.\n\nA **MAJOR** release (`v1.4.2` → `v2.0.0`) allows breaking changes. Callers must review and migrate, the minor and patch numbers reset to zero, and Go modules at v2 or higher add `/vN` to the module and import path.\n\nIn Go, the major version is part of a module's identity, not only a label. Versions below `v1.0.0` are unstable: a `v0` minor release may contain breaking changes.",
       blocks: [
         {
           type: "diagram",
@@ -281,14 +216,40 @@ export const goModulesAdvanced: Lesson = {
             kind: "flow",
             nodes: [
               { id: "change", label: "I made a change", detail: "what kind is it?" },
-              { id: "break", label: "Breaks callers?", detail: "removed/changed existing API", tone: "danger" },
-              { id: "major", label: "MAJOR bump", detail: "v1.x.y → v2.0.0, and path gains /v2", tone: "danger" },
-              { id: "add", label: "Adds new API?", detail: "backward-compatible additions", tone: "accent" },
-              { id: "minor", label: "MINOR bump", detail: "v1.4.2 → v1.5.0, PATCH resets to 0", tone: "accent" },
-              { id: "fix", label: "Just a bug fix", detail: "no API change, same behavior contract", tone: "success" },
+              {
+                id: "break",
+                label: "Breaks callers?",
+                detail: "removed/changed existing API",
+                tone: "danger",
+              },
+              {
+                id: "major",
+                label: "MAJOR bump",
+                detail: "v1.x.y → v2.0.0, and path gains /v2",
+                tone: "danger",
+              },
+              {
+                id: "add",
+                label: "Adds new API?",
+                detail: "backward-compatible additions",
+                tone: "accent",
+              },
+              {
+                id: "minor",
+                label: "MINOR bump",
+                detail: "v1.4.2 → v1.5.0, PATCH resets to 0",
+                tone: "accent",
+              },
+              {
+                id: "fix",
+                label: "Just a bug fix",
+                detail: "no API change, same behavior contract",
+                tone: "success",
+              },
               { id: "patch", label: "PATCH bump", detail: "v1.4.2 → v1.4.3", tone: "success" },
             ],
-            caption: "Breaking ⇒ major (+ new /vN path). Additive ⇒ minor. Fix-only ⇒ patch. Decide by what callers experience, not by how much code you touched.",
+            caption:
+              "Breaking ⇒ major (+ new /vN path). Additive ⇒ minor. Fix-only ⇒ patch. Decide by what callers experience, not by how much code you touched.",
           },
         },
         {
@@ -302,15 +263,14 @@ export const goModulesAdvanced: Lesson = {
       ],
     },
     mechanics: {
-      body: "Now the precise mechanisms. **Semantic Import Versioning (SIV)** is the rule you met as an analogy, made concrete: for v2 and above, the module path itself must end in `/vN`. The go.mod first line becomes `module github.com/acme/money/v2`, and importers write `import \"github.com/acme/money/v2\"`. v0 and v1 share the bare path (no suffix). Because `.../money` and `.../money/v2` are *different strings*, the toolchain treats them as different packages that can both appear in one build.\n\n**go.sum and the checksum database** make releases tamper-evident. `go.sum` records a cryptographic hash of every dependency's content. On download, Go also consults the public checksum database (`sum.golang.org`) and refuses to proceed if a module's content doesn't match what the database first recorded. That's what makes a build reproducible and a deleted-and-re-pushed tag fatal — the hash is pinned forever. For private code you don't want sent to the public database, set `GOPRIVATE` (the convenient default for the finer-grained `GONOPROXY` and `GONOSUMDB` variables) so those module paths skip the proxy and the sum database.\n\n**Minimal Version Selection (MVS)** decides which version of each dependency the build uses. Contrary to \"grab the latest,\" Go collects the *minimum* version every module in the graph requires and picks the *highest of those minimums*. Nothing upgrades unless some go.mod explicitly asks for a higher minimum — so adding one dependency can never silently drag others forward.",
+      body: "Now the precise mechanisms. **Semantic Import Versioning (SIV)** is the rule you met as an analogy, made concrete: for v2 and above, the module path itself must end in `/vN`. The go.mod first line becomes `module github.com/acme/money/v2`, and importers write `import \"github.com/acme/money/v2\"`. v0 and v1 share the bare path (no suffix). Because `.../money` and `.../money/v2` are *different strings*, the toolchain treats them as different packages that can both appear in one build.\n\n**go.sum and the checksum database** make releases tamper-evident. `go.sum` records a cryptographic hash of every dependency's content. On download, Go also consults the public checksum database (`sum.golang.org`) and refuses to proceed if a module's content doesn't match what the database first recorded. That's what makes a build reproducible and a deleted-and-re-pushed tag fatal — the hash is pinned forever.\n\nFor private code you don't want sent to the public database, set `GOPRIVATE` (the convenient default for the finer-grained `GONOPROXY` and `GONOSUMDB` variables) so those module paths skip the proxy and the sum database.\n\n**Minimal Version Selection (MVS)** decides which version of each dependency the build uses. Contrary to \"grab the latest,\" Go collects the *minimum* version every module in the graph requires and picks the *highest of those minimums*. Nothing upgrades unless some go.mod explicitly asks for a higher minimum — adding a dependency can still raise another module when it requires a higher minimum.",
       blocks: [
         {
           type: "example",
           example: {
             title: "A v2 module: the path carries the version",
             language: "go-mod",
-            code:
-              "// go.mod for the v2 release\nmodule github.com/acme/money/v2\n\ngo 1.22\n\nrequire github.com/shopspring/decimal v1.4.0\n\n// Consumers import it at the versioned path:\n//   import \"github.com/acme/money/v2\"\n// v1 users keep importing:\n//   import \"github.com/acme/money\"\n// Both can appear in the SAME build — different paths, no collision.",
+            code: '// go.mod for the v2 release\nmodule github.com/acme/money/v2\n\ngo 1.22\n\nrequire github.com/shopspring/decimal v1.4.0\n\n// Consumers import it at the versioned path:\n//   import "github.com/acme/money/v2"\n// v1 users keep importing:\n//   import "github.com/acme/money"\n// Both can appear in the SAME build — different paths, no collision.',
             takeaway:
               "For v2+, the /vN suffix is part of the module path and the import path. That is what lets v1 and v2 coexist instead of clobbering each other.",
           },
@@ -324,17 +284,20 @@ export const goModulesAdvanced: Lesson = {
               {
                 id: "mvs",
                 label: "Go — Minimal Version Selection",
-                detail: "Your go.mod wants C v1.2.0; dep B wants C v1.4.0. Available: up to v1.9.0. Go picks v1.4.0 — the highest MINIMUM required. Nothing else moves.",
+                detail:
+                  "Your go.mod wants C v1.2.0; dep B wants C v1.4.0. Available: up to v1.9.0. Go picks v1.4.0 — the highest MINIMUM required. Nothing else moves.",
                 tone: "success",
               },
               {
                 id: "npm",
                 label: "npm-style — latest compatible",
-                detail: "Tends to resolve to the newest version allowed by ranges (e.g. ^1.2.0 might float to v1.9.0), so the same manifest can build differently over time.",
+                detail:
+                  "Tends to resolve to the newest version allowed by ranges (e.g. ^1.2.0 might float to v1.9.0), so the same manifest can build differently over time.",
                 tone: "muted",
               },
             ],
-            caption: "MVS makes builds deterministic: the selected version only changes when some go.mod explicitly changes a required minimum.",
+            caption:
+              "MVS makes builds deterministic: the selected version only changes when some go.mod explicitly changes a required minimum.",
           },
         },
         {
@@ -358,13 +321,37 @@ export const goModulesAdvanced: Lesson = {
             kind: "sequence",
             nodes: [
               { id: "main", label: "main module requires A and B", detail: "your app's go.mod" },
-              { id: "a", label: "A's go.mod requires C v1.2.0", detail: "A's declared minimum for C" },
-              { id: "b", label: "B's go.mod requires C v1.4.0", detail: "B's declared minimum for C", tone: "accent" },
-              { id: "collect", label: "Go collects all minimums for C", detail: "{ v1.2.0, v1.4.0 }" },
-              { id: "pick", label: "Pick the highest minimum", detail: "v1.4.0 wins — satisfies both A and B", tone: "success" },
-              { id: "ignore", label: "v1.9.0 exists but is NOT chosen", detail: "no go.mod requires it, so MVS leaves it alone", tone: "muted" },
+              {
+                id: "a",
+                label: "A's go.mod requires C v1.2.0",
+                detail: "A's declared minimum for C",
+              },
+              {
+                id: "b",
+                label: "B's go.mod requires C v1.4.0",
+                detail: "B's declared minimum for C",
+                tone: "accent",
+              },
+              {
+                id: "collect",
+                label: "Go collects all minimums for C",
+                detail: "{ v1.2.0, v1.4.0 }",
+              },
+              {
+                id: "pick",
+                label: "Pick the highest minimum",
+                detail: "v1.4.0 wins — satisfies both A and B",
+                tone: "success",
+              },
+              {
+                id: "ignore",
+                label: "v1.9.0 exists but is NOT chosen",
+                detail: "no go.mod requires it, so MVS leaves it alone",
+                tone: "muted",
+              },
             ],
-            caption: "The build uses C v1.4.0. To move to v1.9.0 you must explicitly `go get C@v1.9.0`, which records the new minimum in your go.mod.",
+            caption:
+              "The build uses C v1.4.0. To move to v1.9.0 you must explicitly `go get C@v1.9.0`, which records the new minimum in your go.mod.",
           },
         },
       ],
@@ -377,10 +364,9 @@ export const goModulesAdvanced: Lesson = {
           example: {
             title: "Cutting a tagged release",
             language: "bash",
-            code:
-              "# 1. Decide the bump from what changed (say, added a function → minor).\n# 2. Make go.mod/go.sum exact and drop any local replace.\ngo mod tidy\n\n# 3. Verify from a clean state.\ngo build ./... && go test ./...\n\n# 4. Tag and push — the tag is the release.\ngit tag v1.5.0\ngit push origin v1.5.0\n\n# 5. Confirm the proxy/tooling can resolve it.\ngo list -m github.com/acme/money@v1.5.0\n\n# Installing a specific version of a tool:\ngo install github.com/acme/tool@v1.5.0",
+            code: "# 1. Decide the bump from what changed (say, added a function → minor).\n# 2. Make go.mod/go.sum exact and drop any local replace.\ngo mod tidy\n\n# 3. Verify from a clean state.\ngo build ./... && go test ./...\n\n# 4. Tag and push — the tag is the release.\ngit tag v1.5.0\ngit push origin v1.5.0\n\n# 5. Confirm the proxy/tooling can resolve it.\ngo list -m github.com/acme/money@v1.5.0\n\n# Installing a specific version of a tool:\ngo install github.com/acme/tool@v1.5.0",
             takeaway:
-              "Tidy, verify from clean, tag, push. There is no separate \"publish\" step — pushing the semver tag is the release, and the module proxy picks it up on first request.",
+              'Tidy, verify from clean, tag, push. There is no separate "publish" step — pushing the semver tag is the release, and the module proxy picks it up on first request.',
           },
         },
         {
@@ -406,7 +392,7 @@ export const goModulesAdvanced: Lesson = {
             "**v2+ without a /vN path** → the new major version can't be imported cleanly; it only shows up as `+incompatible` or resolves to old code. Put `/v2` in the module path and imports.",
             "**Deleting/re-pushing a tag** → checksum mismatches for everyone who fetched it, because the proxy and sum database pinned the old hash. Never reuse a version; publish a new one.",
             "**`replace` in a published library's go.mod** → ignored downstream, and it means you never built against the real dependency. Use replace (or a go.work file) only locally and strip it before tagging.",
-            "**Wrong bump** → a breaking change shipped as a minor silently breaks callers who took the \"safe\" upgrade. Bump by what callers experience.",
+            '**Wrong bump** → a breaking change shipped as a minor silently breaks callers who took the "safe" upgrade. Bump by what callers experience.',
             "**Expecting `go get` to grab the latest of everything** → MVS picks minimums; unrequired newer versions are left alone. Upgrade deliberately with `go get pkg@latest`.",
           ],
         },
@@ -415,8 +401,7 @@ export const goModulesAdvanced: Lesson = {
           example: {
             title: "Pulling back a bad release the right way",
             language: "go-mod",
-            code:
-              "// In the module's OWN go.mod, after shipping a broken v1.5.0:\nmodule github.com/acme/money\n\ngo 1.22\n\n// v1.5.0 corrupts data; v1.5.1 fixes it. Steer users away from 1.5.0\n// without deleting it (it still exists for anyone already pinned to it).\nretract v1.5.0 // data corruption on negative amounts; use v1.5.1+\n\n// You can also retract a range, e.g. an accidental early tag:\n// retract [v1.4.0, v1.4.3] // published from the wrong branch",
+            code: "// In the module's OWN go.mod, after shipping a broken v1.5.0:\nmodule github.com/acme/money\n\ngo 1.22\n\n// v1.5.0 corrupts data; v1.5.1 fixes it. Steer users away from 1.5.0\n// without deleting it (it still exists for anyone already pinned to it).\nretract v1.5.0 // data corruption on negative amounts; use v1.5.1+\n\n// You can also retract a range, e.g. an accidental early tag:\n// retract [v1.4.0, v1.4.3] // published from the wrong branch",
             takeaway:
               "retract is published in the retracting module's own go.mod. It marks bad versions so `go get` avoids them and warns pinned users — immutability preserved, no tag ever deleted.",
           },
@@ -461,34 +446,11 @@ export const goModulesAdvanced: Lesson = {
         },
       ],
     },
-    ledgerflow: {
-      body: "This is exactly how LedgerFlow ships. When it's time to release, the team decides the bump from what changed — a bug fix is a patch, a new endpoint is a minor, a breaking change to the public money API would force a v2 at a new `/v2` import path. They run `go mod tidy`, make sure no `replace` directive from local development is still in go.mod, verify the build and tests pass from a clean checkout, then tag the commit (`git tag v1.2.0`) and push it — that tag is the reproducible release, pinned by go.sum so it rebuilds byte-for-byte later. During day-to-day work, when LedgerFlow's service and its internal `money` package are being changed together, a `replace github.com/acme/money => ../money` (or a go.work file) lets them iterate locally — but it is removed before any release. And for the locked-down CI environment that must build offline, they `go mod vendor` so the whole dependency set lives in the repo and the build never touches the network.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: cutting a reproducible release",
-            kind: "sequence",
-            nodes: [
-              { id: "decide", label: "Decide the bump", detail: "patch / minor / major from caller impact" },
-              { id: "tidy", label: "go mod tidy, drop local replace", detail: "go.mod/go.sum exact, no dev shortcuts", tone: "accent" },
-              { id: "verify", label: "Build & test from clean checkout", detail: "reproducibility check" },
-              { id: "tag", label: "git tag v1.2.0 && push", detail: "the tag is the release; go.sum pins it", tone: "success" },
-              { id: "confirm", label: "go list -m module@v1.2.0", detail: "confirm the proxy resolves it" },
-            ],
-            caption: "Semver decides the number, tidy makes it exact, a clean-checkout build proves it's reproducible, the tag ships it immutably.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about versioning\" into \"I know exactly which number to bump and how to ship it.\" Work across predicting the right semver bump, reading a go.mod with replace and retract, predicting what MVS selects, debugging a v2-without-/v2 failure and a bad-tag situation, and designing a v1 → v2 breaking release. Each produces a different kind of evidence — do them, don't just read them.",
-    },
     mastery: {
       body: "You've mastered this when you can explain why v2+ needs a new import path and how that lets major versions coexist, predict which version MVS selects from a set of requirements and why adds don't silently upgrade unrelated deps, cut a clean release by choosing the right bump and verifying it builds reproducibly from a clean checkout, and diagnose a broken release — a deleted tag or a v2 without /v2 — and prescribe the correct fix. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Three ideas carry this lesson. **Version numbers are promises** — patch fixes, minor adds, major breaks — and in Go the major version is part of a module's identity, so v2+ must change the import path to `/vN` (Semantic Import Versioning) because the same path must stay backward compatible forever. **Builds are reproducible and deterministic** — go.sum plus the checksum database pin every dependency's content, and Minimal Version Selection picks the highest of the required minimums, never the latest, so nothing upgrades behind your back. **Releases are immutable** — you cut one by tagging a commit, you never delete a published tag, and you pull back a bad release with `retract` and a new version; `replace` and vendoring are local/CI tools, not things you ship in a library.\n\nAnd with that, the Go journey closes a full loop: from your first `package main` and a printed line, through types, memory, interfaces, errors, the standard library, and concurrency, to shipping a versioned module the rest of the world can depend on. You started by running code; you're finishing by releasing it responsibly.",
+      body: "Three ideas carry this lesson. **Version numbers are promises** — patch fixes, minor adds, major breaks — and in Go the major version is part of a module's identity, so v2+ must change the import path to `/vN` (Semantic Import Versioning) because the same path must stay backward compatible forever.\n\n**Builds are reproducible and deterministic** — go.sum plus the checksum database pin every dependency's content, and Minimal Version Selection picks the highest of the required minimums, rather than simply choosing the latest; changed requirements can still raise selected versions.\n\n**Releases are immutable** — you cut one by tagging a commit, you never delete a published tag, and you pull back a bad release with `retract` and a new version; `replace` and vendoring are local/CI tools, not things you ship in a library.\n\nAnd with that, the Go journey closes a full loop: from your first `package main` and a printed line, through types, memory, interfaces, errors, the standard library, and concurrency, to shipping a versioned module the rest of the world can depend on. You started by running code; you're finishing by releasing it responsibly.",
       blocks: [
         {
           type: "points",

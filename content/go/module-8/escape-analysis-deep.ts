@@ -19,16 +19,11 @@ export const goEscapeAnalysisDeep: Lesson = {
   difficulty: "advanced",
   prerequisites: ["go-stack-heap-escape", "go-profiling-pprof"],
   learningObjectives: [
-    "Run `go build -gcflags=-m` (and `-m -m`) and correctly interpret \"moved to heap\", \"escapes to heap\", and \"does not escape\"",
+    'Run `go build -gcflags=-m` (and `-m -m`) and correctly interpret "moved to heap", "escapes to heap", and "does not escape"',
     "Explain the common reasons a value escapes — returning a pointer, storing it somewhere longer-lived, interface conversion, closures, and unknown-size allocations",
     "Reduce allocations on a hot path by restructuring code, then confirm the win with a benchmark's allocs/op rather than trusting intuition",
   ],
   concepts: ["escape-analysis", "gcflags", "inlining", "allocation"],
-  ledgerFlowApplications: [
-    "Run `-gcflags=-m` on LedgerFlow's transaction-posting path to see which values the compiler moves to the heap",
-    "Find a posting-path value that escapes only because it is returned as a pointer, and restructure to return it by value so it stays on the stack",
-    "Prove the change with a benchmark: watch allocs/op drop after removing the escape, not just the wall-clock time",
-  ],
   references: [
     {
       title: "A Guide to the Go GC",
@@ -37,7 +32,7 @@ export const goEscapeAnalysisDeep: Lesson = {
         "How the garbage collector works and why fewer heap allocations mean less GC pressure and more predictable latency.",
       relevance:
         "Grounds why escaping matters: the cost you are avoiding is heap allocation plus the GC work it creates.",
-      required: true,
+      required: false,
       section: "Understanding costs",
     },
     {
@@ -47,7 +42,7 @@ export const goEscapeAnalysisDeep: Lesson = {
         "The `-m` (and `-m -m`) diagnostic flags that print escape-analysis and inlining decisions, and `//go:noinline`.",
       relevance:
         "The authoritative reference for the exact flags this lesson uses to read escape decisions.",
-      required: true,
+      required: false,
       section: "Compiler directives",
     },
     {
@@ -57,7 +52,7 @@ export const goEscapeAnalysisDeep: Lesson = {
         "How to profile CPU and memory so you optimize the code that actually matters instead of guessing.",
       relevance:
         "Reinforces the prerequisite discipline: profile first to find the hot path, then read `-m` on that function.",
-      required: true,
+      required: false,
       section: "Memory profiling",
     },
     {
@@ -90,11 +85,11 @@ export const goEscapeAnalysisDeep: Lesson = {
       prompt:
         "You run `go build -gcflags=-m ./...` and see these three lines:\n  ./post.go:12:6: can inline amount\n  ./post.go:20:9: leaking param: p to result ~r0 level=0\n  ./post.go:31:13: ...interface{} arg does not escape\nExplain in plain language what each line tells you.",
       expectedAnswer:
-        "Line 1: the compiler can inline `amount` (paste its body into callers), which may remove a call and enable further escape wins. Line 2: parameter `p` \"leaks\" — it flows out of the function through the return value, so whatever `p` points to must be heap-safe for callers. Line 3: the variadic `...interface{}` arg to something like `fmt` did NOT escape here, so no allocation was forced for it in this call.",
+        'Line 1: the compiler can inline `amount` (paste its body into callers), which may remove a call and enable further escape wins. Line 2: parameter `p` "leaks" — it flows out of the function through the return value, so whatever `p` points to must be heap-safe for callers. Line 3: the variadic `...interface{}` arg to something like `fmt` did NOT escape here, so no allocation was forced for it in this call.',
       hints: [
-        "\"can inline\" is an inlining decision, not an escape.",
-        "\"leaking param ... to result\" means the parameter's pointee flows out via the return value.",
-        "\"does not escape\" is the good outcome — the value stayed on the stack.",
+        '"can inline" is an inlining decision, not an escape.',
+        '"leaking param ... to result" means the parameter\'s pointee flows out via the return value.',
+        '"does not escape" is the good outcome — the value stayed on the stack.',
       ],
     },
     {
@@ -115,7 +110,7 @@ export const goEscapeAnalysisDeep: Lesson = {
       id: "go8ea-debug-interface-box",
       type: "debugging",
       prompt:
-        "A logging helper `func logAmount(v int64) { log.Printf(\"amount=%d\", v) }` shows up as a top allocator in the memory profile, even though it looks like it allocates nothing. Explain where the allocation comes from and one way to reduce it.",
+        'A logging helper `func logAmount(v int64) { log.Printf("amount=%d", v) }` shows up as a top allocator in the memory profile, even though it looks like it allocates nothing. Explain where the allocation comes from and one way to reduce it.',
       expectedAnswer:
         "`log.Printf` takes `...interface{}`. Passing `v` (an int64) as an `interface{}` boxes it — the value is converted to an interface, which usually escapes to the heap. That per-call boxing is the allocation. Reduce it by logging less on the hot path, by sampling/guarding the log, or by using a lower-allocation logging approach; the point is the interface conversion, not the format string.",
       hints: [
@@ -129,9 +124,9 @@ export const goEscapeAnalysisDeep: Lesson = {
       prompt:
         "`func amounts(entries []Entry) []int64 { var out []int64; for _, e := range entries { out = append(out, e.Cents) } return out }` reallocates its backing array several times as it grows. Rewrite it to allocate once, and say why the final result still escapes.",
       starterCode:
-        'func amounts(entries []Entry) []int64 {\n    var out []int64\n    for _, e := range entries {\n        out = append(out, e.Cents)\n    }\n    return out\n}',
+        "func amounts(entries []Entry) []int64 {\n    var out []int64\n    for _, e := range entries {\n        out = append(out, e.Cents)\n    }\n    return out\n}",
       expectedAnswer:
-        'func amounts(entries []Entry) []int64 {\n    out := make([]int64, 0, len(entries)) // one allocation, sized up front\n    for _, e := range entries {\n        out = append(out, e.Cents)\n    }\n    return out\n}\n// The returned slice still escapes (it outlives the call), but we now pay for\n// ONE heap allocation of a known size instead of several regrowths.',
+        "func amounts(entries []Entry) []int64 {\n    out := make([]int64, 0, len(entries)) // one allocation, sized up front\n    for _, e := range entries {\n        out = append(out, e.Cents)\n    }\n    return out\n}\n// The returned slice still escapes (it outlives the call), but we now pay for\n// ONE heap allocation of a known size instead of several regrowths.",
       hints: [
         "`append` on a nil slice grows the backing array in steps, each a fresh allocation.",
         "`make([]int64, 0, len(entries))` reserves capacity once; the returned slice must still live past the call, so it stays on the heap — just allocated a single time.",
@@ -214,63 +209,6 @@ export const goEscapeAnalysisDeep: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "Two beliefs trip people up here. The first is: \"I'll just avoid pointers — pointers are slow.\" So they copy big structs around to dodge `*T`, convinced the indirection is the enemy. The second is the opposite reflex: \"I'll pass pointers everywhere to avoid copying,\" assuming that's always the cheaper move.\n\nBoth miss what actually costs money. The expense isn't the pointer or the indirection — it's whether the value **escapes to the heap**. A pointer to a value that stays on the stack is perfectly cheap. A large value that escapes is expensive whether or not you took its address. Optimizing \"pointers\" instead of \"escapes\" is optimizing the wrong thing.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "warning",
-            title: "Myth-buster: \"pointers are slow\"",
-            text: "Pointer indirection is nearly free on modern CPUs. The real cost people blame on pointers is the heap allocation and GC pressure that happens when a value *escapes* — and escaping is what taking an address can trigger, not the dereference itself. Fix the escape, not the pointer.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "\"Avoid all pointers\" and \"use pointers everywhere\" are both cargo-cult rules.",
-            "The cost that matters is the heap allocation caused by **escaping**, not indirection.",
-            "You can't reason about this by staring at the source — you have to read the compiler's decision.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "Because the escape decision is invisible in the source, the failure mode is quiet: your code is correct and even looks efficient, yet a memory profile shows a helper you'd never suspect at the top of the allocation list. You guess at a fix, change something, and the number doesn't move — or gets worse — because you changed a value that was never escaping in the first place.\n\nThe underlying trap is optimizing by intuition. Go's compiler is doing real analysis you can't fully predict by eye (it's deliberately *conservative* — when it can't prove a value is safe on the stack, it plays safe and heap-allocates). Guessing wastes effort and sometimes pessimizes the code. The discipline that fixes this is the same one from the profiling lesson: measure first, then read the compiler, then change one thing, then measure again.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The optimization that changed nothing",
-            context:
-              "A developer sees the posting path is slow, assumes a big struct being copied is the culprit, and rewrites a dozen functions to pass `*Posting` instead of `Posting`. The benchmark's allocs/op goes UP, and latency is unchanged.",
-            insight:
-              "The struct was living happily on the stack — copying it was cheap. Switching to pointers made several of those values escape to the heap, adding allocations. Nobody had run `-gcflags=-m` or a benchmark first, so the 'fix' targeted an imaginary problem and created a real one.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental image. Escape analysis is the compiler asking one question about every value you create: **\"Can I prove this value stops being needed the moment its function returns?\"** If yes, it goes on the stack and vanishes for free when the frame pops. If the compiler *can't* prove that — because a reference to the value leaks out past the frame, or its lifetime is unclear — the value \"escapes\" and is allocated on the heap so it can safely outlive the call.\n\nSo a value escapes whenever something that outlives the function can still reach it after the function returns. Return its address? A caller now holds a reference that outlives the frame — escape. Store its pointer in a global, a heap object, or a channel? Same. Hide it inside an `interface{}` whose lifetime the compiler can't bound? Escape. The whole art is spotting these \"reference leaks out\" moments.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "The one question",
-            text: "For any value, ask: does a reference to it survive past the function that made it? If yes, it must be on the heap. If the compiler can't be sure, it assumes yes (it's conservative). Stack allocation is what you *earn* by keeping the value's lifetime provably local.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "A value escapes when a reference to it can outlive the function that created it.",
-            "The compiler is conservative: unsure means heap, to stay correct.",
-            "Stack allocation is never guaranteed by a keyword — it's a property the compiler proves.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
       body: "Keep two facts fixed. First: **you never command stack or heap directly.** There is no keyword. `new(T)` does *not* mean heap, and a plain `T{}` literal does *not* mean stack — either can end up either place depending on whether it escapes. The compiler is the sole decider. Second: **escape is about lifetime, not about pointers per se.** Taking an address (`&x`) is only a problem when that address then leaves the frame.\n\nSo the model is: *values are stack-allocated by default, and get promoted to the heap exactly when the compiler can see (or can't rule out) that they outlive their frame.* Your job as an optimizer is to shorten and clarify lifetimes so the compiler can safely keep more values on the stack — and to read `-gcflags=-m` to check whether it did.",
       blocks: [
@@ -303,7 +241,7 @@ export const goEscapeAnalysisDeep: Lesson = {
           type: "note",
           note: {
             tone: "info",
-            title: "`new(T)` is not \"heap\"",
+            title: '`new(T)` is not "heap"',
             text: "`new(T)` just returns `*T` to a zeroed T; if that pointer never escapes, the T sits on the stack. Conversely a bare `T{}` literal escapes if you return its address. The syntax you used is not the deciding factor — the lifetime is.",
           },
         },
@@ -317,10 +255,9 @@ export const goEscapeAnalysisDeep: Lesson = {
           example: {
             title: "Reading `-gcflags=-m` on a returned-pointer function",
             language: "bash",
-            code:
-              "$ go build -gcflags=-m ./ledger/\n# ledger\n./post.go:8:6: can inline newPosting\n./post.go:9:2: moved to heap: p\n./post.go:14:22: leaking param: entries to result ~r0 level=0\n\n# newPosting returns &p, so p is 'moved to heap'.\n# 'leaking param: entries' means the entries slice flows out via the return.\n# 'can inline newPosting' is an inlining decision, not an escape.",
+            code: "$ go build -gcflags=-m ./ledger/\n# ledger\n./post.go:8:6: can inline newPosting\n./post.go:9:2: moved to heap: p\n./post.go:14:22: leaking param: entries to result ~r0 level=0\n\n# newPosting returns &p, so p is 'moved to heap'.\n# 'leaking param: entries' means the entries slice flows out via the return.\n# 'can inline newPosting' is an inlining decision, not an escape.",
             takeaway:
-              "Each line names a file:line and a decision. \"moved to heap\" and \"escapes to heap\" are the ones costing you allocations; \"does not escape\" is the win.",
+              'Each line names a file:line and a decision. "moved to heap" and "escapes to heap" are the ones costing you allocations; "does not escape" is the win.',
           },
         },
         {
@@ -328,8 +265,7 @@ export const goEscapeAnalysisDeep: Lesson = {
           example: {
             title: "The two classic escapes in source",
             language: "go",
-            code:
-              'type Posting struct{ Cents int64 }\n\n// (1) Returning a pointer to a local: p escapes.\nfunc newPosting(c int64) *Posting {\n    p := Posting{Cents: c} // -m: "moved to heap: p"\n    return &p              // the address outlives this frame\n}\n\n// (2) Interface conversion: the boxed int escapes.\nfunc describe(n int64) {\n    var any interface{} = n // -m: "n escapes to heap"\n    _ = any\n}',
+            code: 'type Posting struct{ Cents int64 }\n\n// (1) Returning a pointer to a local: p escapes.\nfunc newPosting(c int64) *Posting {\n    p := Posting{Cents: c} // -m: "moved to heap: p"\n    return &p              // the address outlives this frame\n}\n\n// (2) Interface conversion: the boxed int escapes.\nfunc describe(n int64) {\n    var any interface{} = n // -m: "n escapes to heap"\n    _ = any\n}',
             takeaway:
               "Both escape for the same reason: a reference to the value can be reached after the frame returns — directly via the returned pointer, or indirectly via the interface box.",
           },
@@ -361,13 +297,15 @@ export const goEscapeAnalysisDeep: Lesson = {
               {
                 id: "ref",
                 label: "Does a reference leave the frame?",
-                detail: "returned pointer, stored in a global/heap object/channel, captured by an escaping closure",
+                detail:
+                  "returned pointer, stored in a global/heap object/channel, captured by an escaping closure",
                 tone: "accent",
               },
               {
                 id: "iface",
                 label: "Or boxed into an interface / unknown size?",
-                detail: "assigned to interface{}, passed to fmt's ...interface{}, or make([]T, n) with non-constant n",
+                detail:
+                  "assigned to interface{}, passed to fmt's ...interface{}, or make([]T, n) with non-constant n",
                 tone: "accent",
               },
               {
@@ -397,8 +335,7 @@ export const goEscapeAnalysisDeep: Lesson = {
           example: {
             title: "Measure allocs/op with a benchmark",
             language: "bash",
-            code:
-              "$ go test -bench=BalancePath -benchmem ./ledger/\nBefore:  BenchmarkBalancePath-8   500000   2410 ns/op   96 B/op   3 allocs/op\n# read the compiler's reasoning:\n$ go build -gcflags=-m ./ledger/ 2>&1 | grep balance\n./balance.go:12:9: moved to heap: b\n# ...restructure to return by value, then re-run:\nAfter:   BenchmarkBalancePath-8   900000   1180 ns/op    0 B/op   0 allocs/op",
+            code: "$ go test -bench=BalancePath -benchmem ./ledger/\nBefore:  BenchmarkBalancePath-8   500000   2410 ns/op   96 B/op   3 allocs/op\n# read the compiler's reasoning:\n$ go build -gcflags=-m ./ledger/ 2>&1 | grep balance\n./balance.go:12:9: moved to heap: b\n# ...restructure to return by value, then re-run:\nAfter:   BenchmarkBalancePath-8   900000   1180 ns/op    0 B/op   0 allocs/op",
             takeaway:
               "allocs/op is the honest scoreboard. 3 allocs/op → 0 allocs/op is the kind of confirmation that turns a guess into a real optimization.",
           },
@@ -408,8 +345,7 @@ export const goEscapeAnalysisDeep: Lesson = {
           example: {
             title: "Removing an escape: return by value, and preallocate",
             language: "go",
-            code:
-              'type Balance struct{ Cents int64; Currency string }\n\n// BEFORE: returns *Balance -> "moved to heap: b"\nfunc computeBalance(es []Entry) *Balance {\n    b := &Balance{Currency: "USD"}\n    for _, e := range es { b.Cents += e.Cents }\n    return b\n}\n\n// AFTER: return the small struct by value -> stays on the stack.\nfunc computeBalance(es []Entry) Balance {\n    b := Balance{Currency: "USD"}\n    for _, e := range es { b.Cents += e.Cents }\n    return b\n}\n\n// Preallocate when a slice must escape anyway: one alloc, not several.\nfunc amounts(es []Entry) []int64 {\n    out := make([]int64, 0, len(es)) // sized once\n    for _, e := range es { out = append(out, e.Cents) }\n    return out\n}',
+            code: 'type Balance struct{ Cents int64; Currency string }\n\n// BEFORE: returns *Balance -> "moved to heap: b"\nfunc computeBalance(es []Entry) *Balance {\n    b := &Balance{Currency: "USD"}\n    for _, e := range es { b.Cents += e.Cents }\n    return b\n}\n\n// AFTER: return the small struct by value -> stays on the stack.\nfunc computeBalance(es []Entry) Balance {\n    b := Balance{Currency: "USD"}\n    for _, e := range es { b.Cents += e.Cents }\n    return b\n}\n\n// Preallocate when a slice must escape anyway: one alloc, not several.\nfunc amounts(es []Entry) []int64 {\n    out := make([]int64, 0, len(es)) // sized once\n    for _, e := range es { out = append(out, e.Cents) }\n    return out\n}',
             takeaway:
               "Return small values instead of pointers to keep them on the stack; when a result genuinely must escape (like a returned slice), preallocate its capacity so you pay for exactly one allocation.",
           },
@@ -425,7 +361,7 @@ export const goEscapeAnalysisDeep: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before you read on — a corrected wrong guess sticks better than a skimmed right one. Here are two nearly identical functions:\n\n```\nfunc a() int {\n    x := 42\n    return x        // returns the value\n}\n\nfunc b() *int {\n    x := 42\n    return &x       // returns the address\n}\n```\n\nFor each, does `x` land on the stack or the heap? Commit to an answer for both.\n\nNow the result. In `a`, `x` is copied out by value; nothing holds a reference to the local after the frame returns, so `x` stays on the **stack** and `-gcflags=-m` says nothing about it. In `b`, you return `&x`; the caller now holds a pointer that outlives `b`'s frame, so the compiler prints `moved to heap: x` and allocates it on the **heap**. Same tiny function, one character of difference (`&`), and one of them costs an allocation on every call. The lesson: escape is decided by whether a reference outlives the frame, and the only way to be sure is to read `-m` — don't trust the shape of the code.",
+      body: "Predict before you read on — a corrected wrong guess sticks better than a skimmed right one. Here are two nearly identical functions:\n\n```\nfunc a() int {\n    x := 42\n    return x        // returns the value\n}\n\nfunc b() *int {\n    x := 42\n    return &x       // returns the address\n}\n```\n\nFor each, does `x` land on the stack or the heap? Commit to an answer for both.\n\nNow the result. In `a`, `x` is copied out by value; nothing holds a reference to the local after the frame returns, so `x` stays on the **stack** and `-gcflags=-m` says nothing about it. In `b`, you return `&x`; the caller now holds a pointer that outlives `b`'s frame, so the compiler prints `moved to heap: x` and allocates it on the **heap**.\n\nSame tiny function, one character of difference (`&`), and one of them costs an allocation on every call. The lesson: escape is decided by whether a reference outlives the frame, and the only way to be sure is to read `-m` — don't trust the shape of the code.",
     },
     "failure-cases": {
       body: "The escapes you'll actually meet cluster around a handful of patterns. Learn to spot them in `-gcflags=-m`, and remember that spotting one doesn't mean you must fix it — only fix escapes on paths the profiler flagged as hot.",
@@ -445,8 +381,7 @@ export const goEscapeAnalysisDeep: Lesson = {
           example: {
             title: "The `fmt`/`log` allocation that hides in plain sight",
             language: "go",
-            code:
-              'func logAmount(v int64) {\n    // v is passed as interface{} to a ...interface{} parameter,\n    // so it is boxed -> "v escapes to heap" on every call.\n    log.Printf("amount=%d", v)\n}\n\n// -gcflags=-m shows something like:\n//   ./log.go:3:20: v escapes to heap\n//   ./log.go:3:12: ...interface{} arg does not escape (the slice itself)',
+            code: 'func logAmount(v int64) {\n    // v is passed as interface{} to a ...interface{} parameter,\n    // so it is boxed -> "v escapes to heap" on every call.\n    log.Printf("amount=%d", v)\n}\n\n// -gcflags=-m shows something like:\n//   ./log.go:3:20: v escapes to heap\n//   ./log.go:3:12: ...interface{} arg does not escape (the slice itself)',
             takeaway:
               "A logging call that looks allocation-free can be a top allocator because arguments are boxed into interfaces. On a hot path, log less or guard the call — the culprit is the boxing, not the format string.",
           },
@@ -490,29 +425,6 @@ export const goEscapeAnalysisDeep: Lesson = {
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "This is exactly how LedgerFlow tunes its transaction-posting path. The path is hot — it runs on every posted entry — so it's a legitimate target once pprof confirms it's allocating. The team runs `go build -gcflags=-m ./ledger/` and reads the output for that path, and finds a `computeBalance`-style helper reporting `moved to heap: b` purely because it returned a `*Balance`. Since `Balance` is small, they restructure it to return the value instead of a pointer, so it stays on the stack. Then they prove the win the only way that counts: a benchmark with `-benchmem` shows allocs/op on the posting path drop to zero for that function. Same behavior for callers, one fewer allocation per posted entry, and less GC pressure under load — a real latency improvement, measured rather than assumed.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: cutting an allocation on the posting path",
-            kind: "sequence",
-            nodes: [
-              { id: "profile", label: "pprof flags the posting path", detail: "computeBalance is allocating hot" },
-              { id: "bench", label: "Benchmark baseline", detail: "-benchmem shows 3 allocs/op", tone: "accent" },
-              { id: "readm", label: "Read -gcflags=-m", detail: "\"moved to heap: b\" — b escapes because it's returned as *Balance", tone: "danger" },
-              { id: "change", label: "Return Balance by value", detail: "small struct, lifetime now provably local" },
-              { id: "confirm", label: "Re-benchmark", detail: "0 allocs/op on that function — confirmed", tone: "success" },
-            ],
-            caption: "Profile to pick the target, read -m for the reason, make one change, re-measure to prove it.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about escape analysis\" into \"I read `-gcflags=-m` without flinching.\" Work across predicting whether a value escapes, reading real `-m` output line by line, refactoring away an escape (return by value, preallocate), debugging a hidden interface-boxing allocation, and designing a disciplined measure-first workflow. Each produces a different kind of evidence — do them, don't just read them.",
     },
     mastery: {
       body: "You've mastered this when you can explain what escape analysis is and name the common causes of escape from memory, predict whether a value escapes and what `-gcflags=-m` will say about it, restructure a function to remove an unnecessary escape and prove the drop in allocs/op with a benchmark, and diagnose a hidden allocation from interface boxing. Attest a criterion only when you genuinely have that evidence — reading the lesson doesn't count; measuring a real before/after does.",

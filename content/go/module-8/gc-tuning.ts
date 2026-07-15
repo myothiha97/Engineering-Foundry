@@ -24,11 +24,6 @@ export const goGcTuning: Lesson = {
     "Tune a service with evidence from GODEBUG=gctrace, MemStats, and benchmarks instead of copying settings, and recognize the GOMEMLIMIT death spiral",
   ],
   concepts: ["GOGC", "GOMEMLIMIT", "gc-pacing"],
-  ledgerFlowApplications: [
-    "Set GOMEMLIMIT to ~90–95% of the ledger service's container memory so it stays under the cgroup limit instead of being OOM-killed",
-    "Reason about GOGC under posting load: leave it near default for steady state and lean on GOMEMLIMIT as the ceiling",
-    "Read gctrace output from the running service to decide whether GC is costing too much CPU before changing any knob",
-  ],
   references: [
     {
       title: "A Guide to the Go GC",
@@ -37,7 +32,7 @@ export const goGcTuning: Lesson = {
         "How the collector paces itself, what GOGC and GOMEMLIMIT actually control, and how to reason about the memory/CPU trade-off with real examples.",
       relevance:
         "The authoritative, beginner-readable explanation of everything this lesson teaches; the single best follow-up read.",
-      required: true,
+      required: false,
       section: "Understanding costs / GOGC / Memory limit",
     },
     {
@@ -47,7 +42,7 @@ export const goGcTuning: Lesson = {
         "The exact meaning and accepted values of the GOGC and GOMEMLIMIT environment variables the runtime reads at startup.",
       relevance:
         "The normative reference for the two env knobs you will set on the ledger container.",
-      required: true,
+      required: false,
       section: "Environment Variables",
     },
     {
@@ -179,7 +174,7 @@ export const goGcTuning: Lesson = {
       kind: "debug",
       description:
         "Diagnose a container OOM (e.g. GOGC=off) and a GOMEMLIMIT death spiral, and explain why more GC tuning cannot fix a live set that exceeds the limit.",
-      required: true,
+      required: false,
     },
     {
       id: "design-container-limits",
@@ -211,67 +206,8 @@ export const goGcTuning: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The first naive mental model is: \"garbage collection means the whole program freezes while it cleans up.\" That's true of some old collectors in other languages — a big stop-the-world pause where nothing runs. People carry that fear into Go and either dread the GC or reach for the knobs in a panic.\n\nThe second naive move is tuning by cargo-cult: someone read that `GOGC=off` or `GOGC=400` \"makes it faster\", so they set it without measuring. Sometimes it helps; often it quietly trades away memory you don't have, and the container gets OOM-killed under real load. Both mistakes come from not knowing what the GC actually does.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Tuning by superstition",
-            language: "bash",
-            code:
-              '# Seen in a Dockerfile, no measurement, no reasoning:\nENV GOGC=off\n\n# "off" does not mean "default" — it DISABLES the collector.\n# The heap now only grows. In a memory-limited container this\n# ends exactly one way: OOM-killed under load.',
-            takeaway:
-              "GOGC=off disables the GC entirely — the heap is never collected. Copying a knob you saw somewhere, without measuring, is how services get OOM-killed in production.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Myth: \"GC = the whole program freezes.\" Go's collector runs *concurrently* with your program.",
-            "Myth: setting a GOGC value you copied will \"make it faster\" — often it just trades away memory you can't spare.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The cargo-cult approach fails in the two most painful ways a service can fail. If you make the GC too lazy (high GOGC, or off), the heap grows unchecked and the container hits its memory limit — the kernel OOM-kills the process, and it just... dies. If you make the GC too eager, or you back it into a corner with a memory limit that's too tight, it spends most of its CPU collecting and the service crawls.\n\nThe worst version is the **death spiral**: you set a memory limit, but the program's genuinely-live memory grows until it's nearly the whole limit. Now every collection has almost no room to work with, so the GC runs again almost immediately, over and over, burning CPU while reclaiming almost nothing. The process isn't killed — it just thrashes and stops serving traffic. No amount of extra GC tuning fixes this, because the memory is actually in use.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The ledger service that gets OOM-killed at peak",
-            context:
-              "The ledger service runs in a 1 GiB container. An engineer set GOGC=300 to cut GC CPU, and it looked great in staging. At month-end posting peak, memory climbs past 1 GiB and the kernel OOM-kills the process mid-batch, leaving some postings half-written.",
-            insight:
-              "GOGC=300 let the heap grow to 4× the live set before collecting. Under peak load that headroom pushed the heap past the container limit. The trade (memory for CPU) was real, but nobody checked whether the memory was there to trade. A GOMEMLIMIT ceiling would have made the GC run harder near the limit and kept the process alive.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental image that fixes the freeze myth. Go's GC works *alongside* your program, not instead of it. Picture your goroutines still running while a separate crew walks the building marking which rooms are still occupied. The crew only asks everyone to hold still for a split second at the very start and end — those are the tiny **stop-the-world** pauses, typically well under a millisecond. The bulk of the work (the walking and marking) happens concurrently while your code keeps executing.\n\nThe method is **tri-color mark-sweep**. Start with everything \"white\" (assumed garbage). Mark everything reachable from your live variables \"gray\", then trace outward, turning things \"black\" (definitely live) as they're fully scanned. When there's nothing gray left, anything still white is unreachable — it's garbage, and its memory is swept back into the free pool. The colors are just bookkeeping so this can happen incrementally, a bit at a time, without stopping your program.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "Concurrent, not frozen",
-            text: "Go's collector is designed for low latency: short stop-the-world pauses (sub-millisecond in typical services) with the heavy marking work running concurrently with your goroutines. The trade-off is that GC uses some CPU while your program runs, rather than pausing everything. That's usually the trade a backend wants.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "The GC runs **concurrently** with your program — not one big freeze.",
-            "Pauses are the tiny stop-the-world moments at the start/end of a cycle; marking happens while you run.",
-            "**Tri-color mark-sweep**: mark what's reachable (gray→black), sweep what stays white (unreachable) back to free memory.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "Now the model that makes the knobs make sense. After each collection there's a **live set** — the memory that's genuinely still reachable and in use. Your program keeps allocating, so the heap grows above the live set. The GC's job is to run again *before* the heap grows too far. \"Too far\" is exactly what **GOGC** defines.\n\n**GOGC is a percentage of headroom.** GOGC=100 (the default) means: let the heap grow to 100% *over* the live set — i.e. to 2× the live set — before triggering the next GC. If the live set is 250 MB, the GC aims to fire when the heap reaches ~500 MB. Raise GOGC and you allow more headroom (fewer, later collections → more memory, less CPU). Lower it and you allow less (more, earlier collections → less memory, more CPU). GOGC=off removes the trigger entirely, so the heap only grows. This is the single knob for the memory-versus-CPU trade.",
+      body: "Now the model that makes the knobs make sense. After each collection there's a **live set** — the memory that's genuinely still reachable and in use. Your program keeps allocating, so the heap grows above the live set. The GC's job is to run again *before* the heap grows too far. \"Too far\" is exactly what **GOGC** defines.\n\n**GOGC is a percentage of headroom. ** GOGC=100 (the default) means: let the heap grow to 100% *over* the live set — i.e. to 2× the live set — before triggering the next GC. If the live set is 250 MB, the GC aims to fire when the heap reaches ~500 MB. Raise GOGC and you allow more headroom (fewer, later collections → more memory, less CPU).\n\nLower it and you allow less (more, earlier collections → less memory, more CPU). GOGC=off removes the trigger entirely, so the heap only grows. This is the single knob for the memory-versus-CPU trade.",
       blocks: [
         {
           type: "diagram",
@@ -282,17 +218,20 @@ export const goGcTuning: Lesson = {
               {
                 id: "low",
                 label: "Low GOGC (e.g. 50)",
-                detail: "Heap triggers at 1.5× the live set. More frequent GCs → less peak memory, more CPU spent collecting.",
+                detail:
+                  "Heap triggers at 1.5× the live set. More frequent GCs → less peak memory, more CPU spent collecting.",
                 tone: "accent",
               },
               {
                 id: "high",
                 label: "High GOGC (e.g. 300)",
-                detail: "Heap triggers at 4× the live set. Fewer GCs → more peak memory, less CPU spent collecting.",
+                detail:
+                  "Heap triggers at 4× the live set. Fewer GCs → more peak memory, less CPU spent collecting.",
                 tone: "muted",
               },
             ],
-            caption: "GOGC=100 (default) triggers at 2× the live set. It's a dial between memory and CPU — turning it one way costs the other.",
+            caption:
+              "GOGC=100 (default) triggers at 2× the live set. It's a dial between memory and CPU — turning it one way costs the other.",
           },
         },
         {
@@ -306,7 +245,7 @@ export const goGcTuning: Lesson = {
       ],
     },
     mechanics: {
-      body: "The mechanism that decides *when* to collect is called **pacing**. The runtime doesn't wait for the heap to hit the GOGC target and then panic — it estimates how fast you're allocating and starts the concurrent mark early enough that it *finishes* right around the target. That's why you rarely see the heap blow far past the goal: the pacer is steering toward it continuously.\n\n**GOMEMLIMIT** (added in Go 1.19) adds a second input to the pacer: a **soft** total-memory ceiling. As the heap climbs toward GOMEMLIMIT, the pacer runs the GC *more aggressively* — more often, earlier — to try to stay under the limit, even if GOGC's headroom hasn't been used up. It's the modern way to avoid OOM in a container. Crucially it's *soft*: the runtime works to stay under it but can briefly exceed it, and it cannot free memory that's genuinely live. You set both via environment variables (`GOGC`, `GOMEMLIMIT`) or from code (`debug.SetGCPercent`, `debug.SetMemoryLimit`).",
+      body: "The mechanism that decides *when* to collect is called **pacing**. The runtime doesn't wait for the heap to hit the GOGC target and then panic — it estimates how fast you're allocating and starts the concurrent mark early enough that it *finishes* right around the target. That's why you rarely see the heap blow far past the goal: the pacer is steering toward it continuously.\n\n**GOMEMLIMIT** (added in Go 1.19) adds a second input to the pacer: a **soft** total-memory ceiling. As the heap climbs toward GOMEMLIMIT, the pacer runs the GC *more aggressively* — more often, earlier — to try to stay under the limit, even if GOGC's headroom hasn't been used up. It's the modern way to avoid OOM in a container.\n\nCrucially it's *soft*: the runtime works to stay under it but can briefly exceed it, and it cannot free memory that's genuinely live. You set both via environment variables (`GOGC`, `GOMEMLIMIT`) or from code (`debug.SetGCPercent`, `debug.SetMemoryLimit`).",
       blocks: [
         {
           type: "note",
@@ -321,8 +260,7 @@ export const goGcTuning: Lesson = {
           example: {
             title: "Setting the knobs — env or code",
             language: "bash",
-            code:
-              '# Via environment (read at process startup):\nexport GOGC=100          # default headroom; often left implicit\nexport GOMEMLIMIT=920MiB  # soft ceiling for a ~1 GiB container\n\n# GOMEMLIMIT accepts units: B, KiB, MiB, GiB (powers of 1024).\n# GOGC accepts a number (percent) or the word "off".',
+            code: '# Via environment (read at process startup):\nexport GOGC=100          # default headroom; often left implicit\nexport GOMEMLIMIT=920MiB  # soft ceiling for a ~1 GiB container\n\n# GOMEMLIMIT accepts units: B, KiB, MiB, GiB (powers of 1024).\n# GOGC accepts a number (percent) or the word "off".',
             takeaway:
               "The env vars are read once at startup. GOMEMLIMIT takes a size with binary units; GOGC takes a percentage or `off`.",
           },
@@ -332,8 +270,7 @@ export const goGcTuning: Lesson = {
           example: {
             title: "The same settings from code (runtime/debug)",
             language: "go",
-            code:
-              'import "runtime/debug"\n\nfunc main() {\n    debug.SetGCPercent(100)                 // same as GOGC=100\n    debug.SetMemoryLimit(920 * 1024 * 1024) // ~920 MiB soft limit, in bytes\n    // Passing -1 to either reads the current value without changing it.\n    // run the service...\n}',
+            code: 'import "runtime/debug"\n\nfunc main() {\n    debug.SetGCPercent(100)                 // same as GOGC=100\n    debug.SetMemoryLimit(920 * 1024 * 1024) // ~920 MiB soft limit, in bytes\n    // Passing -1 to either reads the current value without changing it.\n    // run the service...\n}',
             takeaway:
               "SetGCPercent and SetMemoryLimit are the programmatic equivalents. SetMemoryLimit takes bytes; use it when the budget comes from your own config instead of the environment.",
           },
@@ -357,14 +294,42 @@ export const goGcTuning: Lesson = {
             title: "Heap over time: what GOGC and GOMEMLIMIT each control",
             kind: "sequence",
             nodes: [
-              { id: "grow", label: "Heap grows as you allocate", detail: "climbs above the live set between collections" },
-              { id: "target", label: "Reaches the GOGC target", detail: "e.g. 2× the live set at GOGC=100", tone: "accent" },
-              { id: "gc", label: "GC runs (mostly concurrent)", detail: "reclaims garbage; heap drops back toward the live set", tone: "success" },
-              { id: "repeat", label: "Climb repeats — a sawtooth", detail: "tooth height is set by GOGC" },
-              { id: "near", label: "Heap nears GOMEMLIMIT", detail: "pacer triggers GC earlier to stay under the ceiling", tone: "danger" },
-              { id: "cap", label: "Teeth get shorter near the limit", detail: "more frequent collections cap peak memory" },
+              {
+                id: "grow",
+                label: "Heap grows as you allocate",
+                detail: "climbs above the live set between collections",
+              },
+              {
+                id: "target",
+                label: "Reaches the GOGC target",
+                detail: "e.g. 2× the live set at GOGC=100",
+                tone: "accent",
+              },
+              {
+                id: "gc",
+                label: "GC runs (mostly concurrent)",
+                detail: "reclaims garbage; heap drops back toward the live set",
+                tone: "success",
+              },
+              {
+                id: "repeat",
+                label: "Climb repeats — a sawtooth",
+                detail: "tooth height is set by GOGC",
+              },
+              {
+                id: "near",
+                label: "Heap nears GOMEMLIMIT",
+                detail: "pacer triggers GC earlier to stay under the ceiling",
+                tone: "danger",
+              },
+              {
+                id: "cap",
+                label: "Teeth get shorter near the limit",
+                detail: "more frequent collections cap peak memory",
+              },
             ],
-            caption: "GOGC sets how tall each sawtooth tooth is; GOMEMLIMIT is the ceiling that shortens the teeth as you approach it.",
+            caption:
+              "GOGC sets how tall each sawtooth tooth is; GOMEMLIMIT is the ceiling that shortens the teeth as you approach it.",
           },
         },
       ],
@@ -377,8 +342,7 @@ export const goGcTuning: Lesson = {
           example: {
             title: "Turn on the GC trace",
             language: "bash",
-            code:
-              '# Prints one line per GC cycle to stderr:\nGODEBUG=gctrace=1 ./ledger-service\n\n# Example line:\n# gc 42 @3.210s 4%: 0.11+2.3+0.05 ms clock, ... , 52->54->27 MB, 55 MB goal, 8 P\n#     ^cycle ^uptime ^cumulative GC CPU%      ^heap start->end->live  ^goal ^GOMAXPROCS',
+            code: "# Prints one line per GC cycle to stderr:\nGODEBUG=gctrace=1 ./ledger-service\n\n# Example line:\n# gc 42 @3.210s 4%: 0.11+2.3+0.05 ms clock, ... , 52->54->27 MB, 55 MB goal, 8 P\n#     ^cycle ^uptime ^cumulative GC CPU%      ^heap start->end->live  ^goal ^GOMAXPROCS",
             takeaway:
               "Read the `4%` (cumulative CPU spent on GC) and the `52->54->27 MB` triple (heap start → end → live set). Those two numbers drive almost every tuning decision.",
           },
@@ -388,8 +352,7 @@ export const goGcTuning: Lesson = {
           example: {
             title: "Read the live set from code with MemStats",
             language: "go",
-            code:
-              'import (\n    "fmt"\n    "runtime"\n)\n\nfunc logHeap() {\n    var m runtime.MemStats\n    runtime.ReadMemStats(&m)\n    // HeapAlloc: bytes of allocated, still-reachable heap objects.\n    // NumGC: how many GC cycles have run so far.\n    fmt.Printf("heap=%d MB, gc-cycles=%d\\n", m.HeapAlloc/1024/1024, m.NumGC)\n}',
+            code: 'import (\n    "fmt"\n    "runtime"\n)\n\nfunc logHeap() {\n    var m runtime.MemStats\n    runtime.ReadMemStats(&m)\n    // HeapAlloc: bytes of allocated, still-reachable heap objects.\n    // NumGC: how many GC cycles have run so far.\n    fmt.Printf("heap=%d MB, gc-cycles=%d\\n", m.HeapAlloc/1024/1024, m.NumGC)\n}',
             takeaway:
               "ReadMemStats gives the same information programmatically — useful for exposing heap size and GC counts as metrics on the running service.",
           },
@@ -405,7 +368,7 @@ export const goGcTuning: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. A service has a steady live set of 200 MB and runs with the default GOGC=100 in a container with 4 GiB of memory. gctrace shows it spending 18% of CPU in GC, which is hurting throughput, and memory usage is nowhere near the limit.\n\nYou change GOGC from 100 to 400 and redeploy. Predict, before reading on: what happens to GC frequency, GC CPU%, and peak memory?\n\nHere's the trace. At GOGC=400 the heap is allowed to grow to 5× the live set (400% headroom over 200 MB ≈ 1 GB) before a collection, instead of 2× (~400 MB). So the GC runs far less often, and gctrace's cumulative CPU% drops sharply — maybe from 18% toward single digits. Peak memory rises to roughly 1 GB, but that's fine here because the container has 4 GiB to spare. This is the *good* case for raising GOGC: you had spare memory and a GC-CPU problem, so you traded the memory you had for the CPU you needed — and you confirmed it with gctrace, not a hunch. Had memory been tight, the same change could have OOM-killed the service.",
+      body: "Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. A service has a steady live set of 200 MB and runs with the default GOGC=100 in a container with 4 GiB of memory. gctrace shows it spending 18% of CPU in GC, which is hurting throughput, and memory usage is nowhere near the limit.\n\nYou change GOGC from 100 to 400 and redeploy. Predict, before reading on: what happens to GC frequency, GC CPU%, and peak memory?\n\nHere's the trace. At GOGC=400 the heap is allowed to grow to 5× the live set (400% headroom over 200 MB ≈ 1 GB) before a collection, instead of 2× (~400 MB). So the GC runs far less often, and gctrace's cumulative CPU% drops sharply — maybe from 18% toward single digits. Peak memory rises to roughly 1 GB, but that's fine here because the container has 4 GiB to spare.\n\nThis is the *good* case for raising GOGC: you had spare memory and a GC-CPU problem, so you traded the memory you had for the CPU you needed — and you confirmed it with gctrace, not a hunch. Had memory been tight, the same change could have OOM-killed the service.",
     },
     "failure-cases": {
       body: "The failures here cluster around two misunderstandings: treating GOGC=off as harmless, and forgetting that GOMEMLIMIT is soft and can't free live memory. Here are the ones you'll actually meet.",
@@ -425,8 +388,7 @@ export const goGcTuning: Lesson = {
           example: {
             title: "The death spiral, concretely",
             language: "bash",
-            code:
-              '# GOMEMLIMIT=512MiB, but the live set has grown to ~500 MB.\n# gctrace shows collections firing back-to-back, reclaiming almost nothing:\n# gc 900 @61.1s 71%: ... 505->506->500 MB, 512 MB goal\n# gc 901 @61.2s 72%: ... 506->507->500 MB, 512 MB goal\n#                ^^^ cumulative GC CPU climbing fast; live set barely drops',
+            code: "# GOMEMLIMIT=512MiB, but the live set has grown to ~500 MB.\n# gctrace shows collections firing back-to-back, reclaiming almost nothing:\n# gc 900 @61.1s 71%: ... 505->506->500 MB, 512 MB goal\n# gc 901 @61.2s 72%: ... 506->507->500 MB, 512 MB goal\n#                ^^^ cumulative GC CPU climbing fast; live set barely drops",
             takeaway:
               "When the live set (the last number in the triple) is nearly the goal, the GC thrashes: constant collections, ~500 MB always live, CPU% climbing. No knob fixes this — you must shrink the live set or raise the limit.",
           },
@@ -449,7 +411,7 @@ export const goGcTuning: Lesson = {
       ],
     },
     design: {
-      body: "A few durable rules. First and loudest: **allocate less before you tune anything** — the best GC optimization is the garbage you never create, which is what the escape-analysis lesson was about; GC tuning is the *second* lever, not the first. Second: in a container, set GOMEMLIMIT to ~90–95% of the cgroup memory limit (not 100%), because the Go runtime and any non-Go allocations live outside the heap accounting. Third: use both knobs together — GOGC for steady-state pacing, GOMEMLIMIT as the ceiling. And always, always measure with gctrace or a benchmark before and after; never cargo-cult a number.",
+      body: "A few durable rules. First and loudest: **allocate less before you tune anything** — the best GC optimization is the garbage you never create, which is what the escape-analysis lesson was about; GC tuning is the *second* lever, not the first. Second: in a container, set GOMEMLIMIT to ~90–95% of the cgroup memory limit (not 100%), because the Go runtime and any non-Go allocations live outside the heap accounting.\n\nThird: use both knobs together — GOGC for steady-state pacing, GOMEMLIMIT as the ceiling. And always, always measure with gctrace or a benchmark before and after; never cargo-cult a number.",
       blocks: [
         {
           type: "points",
@@ -472,33 +434,11 @@ export const goGcTuning: Lesson = {
         },
       ],
     },
-    ledgerflow: {
-      body: "This is exactly how LedgerFlow's service is configured to survive its container. It sets **GOMEMLIMIT to about 90–95% of the container's memory limit** — if the container has 1 GiB, GOMEMLIMIT is ~920MiB — so that as posting load pushes the heap up, the GC runs harder and keeps the process under the cgroup limit instead of being OOM-killed mid-batch. It leaves **GOGC at the default** for steady state: under normal posting load the live set is modest, the heap targets 2× it, and that sits well under the ceiling, so GOMEMLIMIT is a guardrail rather than the everyday driver. And before anyone touches a knob, they read `gctrace` from the running service to confirm whether GC CPU is actually a problem — because the real first move, when it is, is to allocate less on the hot posting path, not to spin the dial.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: GC settings for a 1 GiB container",
-            kind: "flow",
-            nodes: [
-              { id: "limit", label: "Container limit: 1 GiB", detail: "the cgroup memory ceiling the kernel enforces" },
-              { id: "memlimit", label: "GOMEMLIMIT ≈ 920MiB", detail: "~90% — leaves headroom for off-heap/runtime memory", tone: "accent" },
-              { id: "gogc", label: "GOGC = default (100)", detail: "steady-state pacing; heap targets 2× the live set", tone: "success" },
-              { id: "observe", label: "Read gctrace before tuning", detail: "confirm GC CPU is really the problem first" },
-            ],
-            caption: "Ceiling from GOMEMLIMIT, everyday pacing from GOGC, and evidence from gctrace before any change.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about the GC\" into \"I can size a container's limits with a straight face.\" Work across predicting the effect of raising GOGC, reading a real gctrace line, designing GOGC/GOMEMLIMIT for a given container, debugging both a GOGC=off OOM and a GOMEMLIMIT death spiral, and setting the limit from code. Each produces a different kind of evidence — do them, don't just read them.",
-    },
     mastery: {
       body: "You've mastered this when you can explain that Go's GC is a concurrent tri-color mark-sweep collector with tiny pauses (not a big freeze), predict what raising or lowering GOGC does to GC frequency, CPU, and peak memory, diagnose both a container OOM and a GOMEMLIMIT death spiral and explain why more tuning can't fix a live set that exceeds the limit, and choose GOGC/GOMEMLIMIT for a container with the belt-and-suspenders reasoning. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Three ideas carry this lesson. **The GC is concurrent, not a freeze** — it's a tri-color mark-sweep collector that marks live memory alongside your running goroutines with only tiny stop-the-world pauses. **GOGC and GOMEMLIMIT are the knobs** — GOGC sets how far the heap grows over the live set before collecting (a memory-versus-CPU trade), and GOMEMLIMIT is a *soft* ceiling that makes the GC run harder as you approach it, the modern way to avoid OOM in a container; use them together. **Tune with evidence, and allocate less first** — read gctrace before and after, set GOMEMLIMIT to ~90–95% of the container limit, and remember that the cheapest collection is the garbage you never created.",
+      body: "Three ideas carry this lesson. **The GC is concurrent, not a freeze** — it's a tri-color mark-sweep collector that marks live memory alongside your running goroutines with only tiny stop-the-world pauses.\n\n**GOGC and GOMEMLIMIT are the knobs** — GOGC sets how far the heap grows over the live set before collecting (a memory-versus-CPU trade), and GOMEMLIMIT is a *soft* ceiling that makes the GC run harder as you approach it, the modern way to avoid OOM in a container; use them together.\n\n**Tune with evidence, and allocate less first** — read gctrace before and after, set GOMEMLIMIT to ~90–95% of the container limit, and remember that the cheapest collection is the garbage you never created.",
       blocks: [
         {
           type: "points",
