@@ -11,10 +11,10 @@ export const goToolchainModules: Lesson = {
   title: "The go tool, modules & workspaces",
   description:
     "Understand the one command that builds, tests, and versions your code — and the module system that decides what compiles.",
-  moduleId: "go-0",
+  moduleId: "go-8",
   estimatedMinutes: 65,
-  difficulty: "beginner",
-  prerequisites: ["go-source-to-process"],
+  difficulty: "intermediate",
+  prerequisites: ["go-source-to-process", "go-unit-table-tests"],
   learningObjectives: [
     "Explain what `go build`, `go run`, and `go test` actually do",
     "Read a go.mod file and describe how a module resolves its dependencies",
@@ -30,18 +30,13 @@ export const goToolchainModules: Lesson = {
     "workspaces",
     "build-cache",
   ],
-  ledgerFlowApplications: [
-    "Initialize LedgerFlow as a single module with a stable import path",
-    "Pin and verify dependencies for reproducible CI builds",
-    "Develop LedgerFlow and a shared library together with a workspace",
-  ],
   references: [
     {
       title: "How to Write Go Code",
       url: "https://go.dev/doc/code",
       teaches: "The canonical layout of packages and modules and how the go tool finds them.",
       relevance: "Establishes the mental model of module → package → file this lesson builds on.",
-      required: true,
+      required: false,
       section: "Code organization; Your first program",
     },
     {
@@ -49,7 +44,7 @@ export const goToolchainModules: Lesson = {
       url: "https://go.dev/ref/mod",
       teaches: "The normative rules for go.mod, versioning, and dependency resolution.",
       relevance: "The authoritative source for everything in the Mechanics stage.",
-      required: true,
+      required: false,
       section: "Module paths; Minimal version selection",
     },
     {
@@ -105,7 +100,7 @@ export const goToolchainModules: Lesson = {
       id: "gotc-design-versioning",
       type: "design",
       prompt:
-        "Decide how you will version LedgerFlow's shared library so a breaking change never silently breaks callers, and state the rule that forces the decision.",
+        "Decide how you will version a shared Go library so a breaking change never silently breaks callers, and state the rule that forces the decision.",
       hints: ["A new major version (v2+) must appear in the import path itself."],
     },
     {
@@ -144,7 +139,7 @@ export const goToolchainModules: Lesson = {
   ],
   sections: {
     problem: {
-      body: "In the last lesson you turned one file into a running process. Real programs are never one file — they are dozens of files, split into packages, and they lean on code other people wrote. Something has to answer three questions every time you build: *which files belong together, where does the outside code come from, and which version of it do I get?*\n\nIn Go, one program answers all three: the **go command** (the `go` you type before `build`, `run`, or `test`). Understanding it is what separates \"it works on my machine\" from \"it builds the same way for everyone, every time.\"",
+      body: "You already know that Go builds a package rather than running one file first. Larger programs contain several packages and may use code downloaded from other modules. Something has to answer three questions: *which files belong together, where does outside code come from, and which version should be used?*\n\nThe **go command** — the `go` in `go build`, `go run`, and `go test` — coordinates that work. This is optional toolchain depth; you do not need it for the earlier language lessons.",
       blocks: [
         {
           type: "note",
@@ -164,81 +159,15 @@ export const goToolchainModules: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The common beginner model is: \"the go tool is just a shortcut for calling the compiler.\" That undersells it in two ways.\n\nFirst, it decides *what* to compile — it walks your imports and builds a graph of packages, so you never list files by hand. Second, it manages *dependencies as data*: the exact versions live in a file (`go.mod`) that travels with your code, so a build is reproducible instead of depending on whatever happened to be installed.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "You name intent, not files",
-            language: "bash",
-            code: "# You never do this:\n# gcc a.go b.go c.go ...\n\n# You do this — the tool discovers the files and their dependencies:\ngo build ./...",
-            takeaway:
-              "`./...` means \"this package and everything below it.\" The tool expands that into the real file list for you.",
-          },
-        },
-      ],
-    },
-    failure: {
-      body: "Skip the module model and you hit failures that feel mysterious because they're about *identity and versions*, not your code.\n\nThe classic one: two machines build the \"same\" project but get different behavior, because one had a newer version of a dependency installed globally. Without a recorded version, \"latest\" is a moving target. The module system exists precisely to kill this class of bug — but only if you understand what it's recording.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "Works here, breaks in CI",
-            context:
-              "A test passes locally but fails in CI. The cause: locally you had an older, more lenient version of a JSON library; CI fetched a newer one with stricter parsing.",
-            insight:
-              "The fix isn't in the test — it's pinning the version in go.mod/go.sum so every machine resolves the exact same dependency.",
-          },
-        },
-        {
-          type: "note",
-          note: {
-            tone: "warning",
-            title: "Common trap",
-            text: "`go get` updates your go.mod. Running it casually to \"just try something\" can silently bump a dependency across your whole project. Read the diff to go.mod after any go get.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the picture to hold. Your code lives in a **module**, identified by a path like `example.com/ledger`. Inside it are **packages** (folders). When a package imports something, the go tool resolves that import to one of three places: the standard library, another package in *your* module, or an *external* module whose version is recorded in `go.mod`.\n\nThe module path is not just a name — it's the prefix of every import inside your project. That's why choosing it well matters.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "Where does an import come from?",
-            kind: "flow",
-            nodes: [
-              { id: "imp", label: "import \"...\"", detail: "a line in your .go file" },
-              { id: "std", label: "std lib?", detail: "e.g. fmt, net/http" },
-              { id: "local", label: "your module?", detail: "same module path prefix" },
-              { id: "ext", label: "external module", detail: "version pinned in go.mod", tone: "accent" },
-            ],
-            caption: "The tool checks: standard library, then your own module, then recorded dependencies.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "The **module path** (in go.mod) is the import prefix for all your own packages.",
-            "Standard-library imports need no dependency entry — they ship with Go.",
-            "External imports must have a recorded version, or the build won't be reproducible.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "The single idea: **go.mod is the source of truth, not your filesystem.** The directory a file sits in doesn't define its import path — the module path plus the folder does. \"Latest\" isn't a version — the exact version in go.mod is.\n\nOnce you believe that, dependency problems become readable: you stop asking \"what's installed?\" and start asking \"what does go.mod say, and does go.sum verify it?\"",
+      body: 'The single idea: **go.mod is the source of truth, not your filesystem.** The directory a file sits in doesn\'t define its import path — the module path plus the folder does. "Latest" isn\'t a version — the exact version in go.mod is.\n\nOnce you believe that, dependency problems become readable: you stop asking "what\'s installed?" and start asking "what does go.mod say, and does go.sum verify it?"',
       blocks: [
         {
           type: "example",
           example: {
             title: "A minimal go.mod, annotated",
-            language: "go",
-            code:
-              "module example.com/ledger   // the import prefix for your packages\n\ngo 1.26                     // the language/toolchain version you target\n\nrequire (\n    github.com/shopspring/decimal v1.4.0        // you import this directly\n    github.com/jackc/pgx/v5 v5.6.0 // indirect   // pulled in by something else\n)",
+            language: "go.mod",
+            code: "module example.com/learn-go // the import prefix for your packages\n\ngo 1.26                     // the language/toolchain version you target\n\nrequire (\n    github.com/shopspring/decimal v1.4.0        // you import this directly\n    github.com/jackc/pgx/v5 v5.6.0 // indirect  // pulled in by something else\n)",
             takeaway:
               "Module path, Go version, and pinned requirements. `// indirect` means you don't import it yourself — a dependency does.",
           },
@@ -265,7 +194,12 @@ export const goToolchainModules: Lesson = {
               { id: "read", label: "Read go.mod", detail: "module path + required versions" },
               { id: "resolve", label: "Resolve imports", detail: "MVS picks exact versions" },
               { id: "cache", label: "Check build cache", detail: "reuse unchanged packages" },
-              { id: "compile", label: "Compile + link", detail: "only what changed", tone: "accent" },
+              {
+                id: "compile",
+                label: "Compile + link",
+                detail: "only what changed",
+                tone: "accent",
+              },
               { id: "out", label: "Artifact", detail: "binary or test result", tone: "success" },
             ],
           },
@@ -282,8 +216,10 @@ export const goToolchainModules: Lesson = {
           type: "scenario",
           scenario: {
             title: "Why the second test run was instant",
-            context: "`go test ./...` takes 20 seconds the first time and under a second the second time, with no code changes.",
-            insight: "Test *results* are cached too, keyed by inputs. Change a file and only affected tests re-run.",
+            context:
+              "`go test ./...` takes 20 seconds the first time and under a second the second time, with no code changes.",
+            insight:
+              "Test *results* are cached too, keyed by inputs. Change a file and only affected tests re-run.",
           },
         },
       ],
@@ -297,11 +233,29 @@ export const goToolchainModules: Lesson = {
             title: "Same engine, different output",
             kind: "compare",
             nodes: [
-              { id: "run", label: "go run", detail: "compile to a temp binary and execute it once" },
+              {
+                id: "run",
+                label: "go run",
+                detail: "compile to a temp binary and execute it once",
+              },
               { id: "build", label: "go build", detail: "produce a reusable executable on disk" },
-              { id: "test", label: "go test", detail: "compile test binaries, run them, cache results" },
-              { id: "get", label: "go get", detail: "add/update a dependency version in go.mod", tone: "accent" },
-              { id: "modtidy", label: "go mod tidy", detail: "add missing and remove unused requirements", tone: "success" },
+              {
+                id: "test",
+                label: "go test",
+                detail: "compile test binaries, run them, cache results",
+              },
+              {
+                id: "get",
+                label: "go get",
+                detail: "add/update a dependency version in go.mod",
+                tone: "accent",
+              },
+              {
+                id: "modtidy",
+                label: "go mod tidy",
+                detail: "add missing and remove unused requirements",
+                tone: "success",
+              },
             ],
           },
         },
@@ -315,8 +269,7 @@ export const goToolchainModules: Lesson = {
           example: {
             title: "From empty folder to buildable module",
             language: "bash",
-            code:
-              "go mod init example.com/ledger   # creates go.mod with your module path\n# ...write code that imports github.com/shopspring/decimal...\ngo mod tidy                       # discovers the import, records the version\ngo build ./...                    # builds every package\ngo test ./...                     # runs every test",
+            code: "go mod init example.com/ledger   # creates go.mod with your module path\n# ...write code that imports github.com/shopspring/decimal...\ngo mod tidy                       # discovers the import, records the version\ngo build ./...                    # builds every package\ngo test ./...                     # runs every test",
             takeaway:
               "You declare the module path once. After that, `go mod tidy` keeps dependencies exactly matched to what your code imports.",
           },
@@ -340,8 +293,8 @@ export const goToolchainModules: Lesson = {
         {
           type: "points",
           items: [
-            "**\"missing go.sum entry\"** → run `go mod tidy` (or `go mod download`) to record checksums.",
-            "**\"cannot find module providing package\"** → the import path is wrong, or you forgot `go get`.",
+            '**"missing go.sum entry"** → run `go mod tidy` (or `go mod download`) to record checksums.',
+            '**"cannot find module providing package"** → the import path is wrong, or you forgot `go get`.',
             "**Silent major-version confusion** → remember v2+ needs `/v2` in the import path.",
             "**Unused/indirect clutter in go.mod** → `go mod tidy` prunes it.",
             "**Committing go.mod but not go.sum** → CI can't verify downloads; commit both.",
@@ -353,9 +306,9 @@ export const goToolchainModules: Lesson = {
           example: {
             title: "The major-version gotcha, live",
             language: "go",
-            code:
-              "// This imports v4 and v5 as genuinely different packages — on purpose:\nimport (\n    pgx4 \"github.com/jackc/pgx/v4\"\n    pgx5 \"github.com/jackc/pgx/v5\"\n)",
-            takeaway: "The `/v5` in the path is the version. Two majors can coexist because they are different import paths.",
+            code: '// This imports v4 and v5 as genuinely different packages — on purpose:\nimport (\n    pgx4 "github.com/jackc/pgx/v4"\n    pgx5 "github.com/jackc/pgx/v5"\n)',
+            takeaway:
+              "The `/v5` in the path is the version. Two majors can coexist because they are different import paths.",
           },
         },
       ],
@@ -389,33 +342,13 @@ export const goToolchainModules: Lesson = {
           type: "scenario",
           scenario: {
             title: "Developing a fix across two modules",
-            context: "You need to change LedgerFlow and a shared library it depends on, at the same time, before either is released.",
-            insight: "A workspace (go.work) points LedgerFlow at your local library checkout — no publishing, no temporary `replace` you might forget to remove.",
+            context:
+              "You need to change an app and a shared library it depends on at the same time, before either is released.",
+            insight:
+              "A workspace (`go.work`) points the app at your local library checkout — no publishing and no temporary `replace` directive to forget.",
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "For LedgerFlow this is concrete. You'll `go mod init` it once with a stable path, add exactly the dependencies you need (a Postgres driver, a decimal library), and commit go.mod + go.sum so every environment — your laptop, CI, the production image — builds the identical binary from the last lesson. When you later extract a shared package, a workspace lets you develop both together without releasing anything mid-change.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "One module, pinned dependencies, reproducible build",
-            kind: "sequence",
-            nodes: [
-              { id: "init", label: "go mod init", detail: "example.com/ledger" },
-              { id: "deps", label: "Add deps", detail: "decimal, pgx — versions pinned" },
-              { id: "tidy", label: "go mod tidy", detail: "go.mod matches real imports" },
-              { id: "commit", label: "Commit go.mod + go.sum", detail: "everyone resolves the same versions" },
-              { id: "build", label: "Reproducible build", detail: "same binary everywhere", tone: "success" },
-            ],
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice makes this stick. Work across predicting the cache, reading a real go.mod, running the init commands yourself, and designing a versioning scheme. Each exercise below produces a different kind of evidence — do them, don't just read them.",
     },
     mastery: {
       body: "You've mastered this when you can explain what the go command does without notes, correctly predict which packages a change rebuilds, read a go.mod and separate direct from indirect dependencies, and defend a module path and versioning choice. Attest each criterion only when you genuinely have that evidence.",
@@ -429,7 +362,7 @@ export const goToolchainModules: Lesson = {
             "Module = versioned unit; package = folder of files; the go command ties them together.",
             "MVS + pinned versions + go.sum = the same build on every machine.",
             "v2+ lives in the import path (semantic import versioning).",
-            "Run `go mod tidy` before you commit. Next up: values, types, and copy semantics.",
+            "Run `go mod tidy` after changing imports so go.mod and go.sum stay accurate.",
           ],
         },
       ],
