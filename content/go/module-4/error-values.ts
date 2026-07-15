@@ -24,11 +24,6 @@ export const goErrorValues: Lesson = {
     "Choose between a sentinel error and a typed error so a caller can act on the failure, not just log it",
   ],
   concepts: ["error-interface", "sentinel-errors", "typed-errors"],
-  ledgerFlowApplications: [
-    "Return an actionable validation error from the domain when a transfer amount is not positive",
-    "Expose a sentinel ErrAccountNotFound the service layer can compare against with ==",
-    "Return a typed ValidationError carrying the offending field and value so the handler can build a precise HTTP response",
-  ],
   references: [
     {
       title: "Error handling and Go — The Go Blog",
@@ -37,7 +32,7 @@ export const goErrorValues: Lesson = {
         "That `error` is a built-in interface, how to create errors with errors.New and fmt.Errorf, and the idiomatic patterns for returning and inspecting them.",
       relevance:
         "The foundational article behind this whole lesson: errors as values you return, not exceptions you throw.",
-      required: true,
+      required: false,
       section: "The error type; Simplifying repetitive error handling",
     },
     {
@@ -47,7 +42,7 @@ export const goErrorValues: Lesson = {
         "Idiomatic error strings, and why callers often need more than a string — a typed error they can inspect for detail.",
       relevance:
         "Backs the move from a bare string error to a typed error carrying fields the caller can act on.",
-      required: true,
+      required: false,
       section: "Errors",
     },
     {
@@ -78,7 +73,7 @@ export const goErrorValues: Lesson = {
       id: "go4ev-read-errorstring",
       type: "code-reading",
       prompt:
-        "Given `type myErr struct{ msg string }` with `func (e *myErr) Error() string { return e.msg }`, explain why `var err error = &myErr{msg: \"boom\"}` compiles even though the code never says the word `error` in the type definition.",
+        'Given `type myErr struct{ msg string }` with `func (e *myErr) Error() string { return e.msg }`, explain why `var err error = &myErr{msg: "boom"}` compiles even though the code never says the word `error` in the type definition.',
       hints: [
         "`error` is just `interface { Error() string }`.",
         "Interface satisfaction in Go is implicit — having the method is enough.",
@@ -102,7 +97,7 @@ export const goErrorValues: Lesson = {
       id: "go4ev-debug-sentinel",
       type: "debugging",
       prompt:
-        "A store defines `var ErrNotFound = errors.New(\"not found\")` and returns it, but a caller checks `if err.Error() == \"not found\"` and it feels fragile. Explain what breaks with the string comparison and fix it to compare against the sentinel value instead.",
+        'A store defines `var ErrNotFound = errors.New("not found")` and returns it, but a caller checks `if err.Error() == "not found"` and it feels fragile. Explain what breaks with the string comparison and fix it to compare against the sentinel value instead.',
       hints: [
         "Comparing error strings breaks the moment someone edits the message text.",
         "Sentinel errors are meant to be compared by identity with ==.",
@@ -112,7 +107,7 @@ export const goErrorValues: Lesson = {
       id: "go4ev-refactor-typed",
       type: "refactoring",
       prompt:
-        "A validation function returns `errors.New(\"invalid field\")`, and the HTTP handler can't tell which field was wrong. Refactor to a typed error carrying the field name and offending value, and show how the handler inspects it.",
+        'A validation function returns `errors.New("invalid field")`, and the HTTP handler can\'t tell which field was wrong. Refactor to a typed error carrying the field name and offending value, and show how the handler inspects it.',
       hints: [
         "Define a struct with the fields, and give it an Error() string method.",
         "The caller can use a type assertion or errors.As to read the fields back out.",
@@ -122,7 +117,7 @@ export const goErrorValues: Lesson = {
       id: "go4ev-design-sentinel-vs-typed",
       type: "design",
       prompt:
-        "For LedgerFlow's account store, decide which failures should be sentinel errors and which should be typed errors, and justify each choice in terms of what the caller needs to do about the failure.",
+        "For a file importer, decide which failures should be sentinel errors and which should be typed errors, then justify each choice by what the caller needs to do.",
       hints: [
         "A sentinel is enough when the caller only needs to know 'which kind of failure'.",
         "A typed error earns its keep when the caller needs extra detail (a field, a code, the bad input).",
@@ -191,72 +186,6 @@ export const goErrorValues: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "Coming from an exception language, the first instinct is to look for `try`/`catch` or to reach for `panic`/`recover` (Go's crash mechanism) as a stand-in. That's the wrong tool: `panic` is for truly unrecoverable bugs, not for a missing file or a bad input.\n\nThe second naive move is to signal failure with a sentinel *result* — return `-1`, or an empty string, or a `nil` pointer — and hope the caller notices. This is exactly the trap Go's designers wanted to avoid: an out-of-band magic value is easy to forget to check, and it can't carry any explanation of *what* went wrong.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "The naive 'magic return value' — don't do this",
-            language: "go",
-            code:
-              '// Naive: -1 secretly means "failed". The caller may forget to check.\nfunc parseAmount(s string) int64 {\n    n, ok := tryParse(s)\n    if !ok {\n        return -1 // what went wrong? no way to say\n    }\n    return n\n}\n\n// The caller has to *remember* that -1 is special.\namount := parseAmount(input)\nif amount == -1 {\n    // ...and we still have no idea why it failed\n}',
-            takeaway: "A magic sentinel value is easy to ignore and carries no explanation — Go returns a real error instead.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Don't reach for panic/recover to model ordinary, expected failures.",
-            "Don't overload a normal return value (-1, \"\", nil) to secretly mean 'failed'.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The magic-value approach fails because nothing forces the caller to look, and the value can't explain itself. Return `-1` for a bad amount and a caller who forgets the check will happily treat `-1` cents as a real balance. There's no compiler nudge, no message, no way to ask 'why did this fail?'.\n\nExceptions fail differently but just as painfully: because a thrown error jumps over intervening code, it's invisible at the call site. You read `x := f()` and nothing tells you `f` might blow up and skip the next ten lines. The failure path is hidden. Go's fix is to make the error path **visible and local** — it's right there in the return signature, and you handle it on the very next line.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The check that never happened",
-            context:
-              "A transfer function returns a plain int64 balance, using -1 to mean 'account not found'. One caller forgets to test for -1 and stores it as the account's new balance. The account now shows a balance of minus one cent, and nothing crashed to warn anyone.",
-            insight:
-              "Because failure was smuggled inside a normal value, the compiler couldn't help and the mistake sailed through. An explicit `error` return makes 'did this fail?' a question you can't quietly skip.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Magic return values: nothing forces a check, and the value can't say why it failed.",
-            "Exceptions: the failure path is invisible at the call site because control jumps away.",
-            "Go wants the failure path explicit and handled locally, right where the call happens.",
-          ],
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental picture. A Go function that can fail hands back **two things**: the result you wanted, and an error slot. On success the error slot is empty (`nil`); on failure it holds a value describing what happened. You always get both, so you always get the chance to look.\n\nBecause the error is just a value, you can do ordinary things with it: store it in a variable, compare it, pass it to another function, or return it upward. It isn't a special beast that only a `catch` block can touch. 'Errors are values' means exactly that — you *program* with them, using the same tools you use for any other value.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "The two-return shape",
-            text: "The idiomatic Go signature for a fallible call is `func do() (Result, error)`. Read it as 'give me the result, and tell me if it went wrong'. Check the error first; trust the result only when the error is nil.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "A fallible function returns (result, error) — you always receive both.",
-            "error is nil on success and a describing value on failure.",
-            "An error is an ordinary value: store it, compare it, pass it, return it.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
       body: "Three ideas make the whole topic click. **One:** `error` is not a keyword — it's a built-in **interface** with a single method, `Error() string`. Anything with that method *is* an error. **Two:** the convention is (result, error), and the caller checks the error before trusting the result. **Three:** there's a rhythm to it — `if err != nil { return err }` — where a function that can't handle a failure passes it up to whoever can.\n\nThat rhythm is the beating heart of Go code. You'll write it constantly. It looks repetitive, and it is — but it means every failure is acknowledged at every level, and the failure path is as readable as the success path.",
       blocks: [
@@ -265,9 +194,9 @@ export const goErrorValues: Lesson = {
           example: {
             title: "`error` is just a one-method interface",
             language: "go",
-            code:
-              '// This is the actual built-in definition — nothing more.\ntype error interface {\n    Error() string\n}\n\n// Any type with an Error() string method satisfies it, implicitly.\ntype notFound struct{ id string }\n\nfunc (e notFound) Error() string {\n    return "account " + e.id + " not found"\n}\n\n// So a notFound value can be used anywhere an error is expected.\nvar err error = notFound{id: "a1"}',
-            takeaway: "Because error is a one-method interface, defining your own error type is just implementing Error() string.",
+            code: '// This is the actual built-in definition — nothing more.\ntype error interface {\n    Error() string\n}\n\n// Any type with an Error() string method satisfies it, implicitly.\ntype notFound struct{ id string }\n\nfunc (e notFound) Error() string {\n    return "account " + e.id + " not found"\n}\n\n// So a notFound value can be used anywhere an error is expected.\nvar err error = notFound{id: "a1"}',
+            takeaway:
+              "Because error is a one-method interface, defining your own error type is just implementing Error() string.",
           },
         },
         {
@@ -281,23 +210,23 @@ export const goErrorValues: Lesson = {
       ],
     },
     mechanics: {
-      body: "Now the concrete tools. The standard library gives you two ways to make an error value. `errors.New(\"message\")` builds an error from a fixed string. `fmt.Errorf(\"...%d...\", x)` works like `fmt.Sprintf` but returns an error, so you can fold in details like the offending value. Both hand back something satisfying the `error` interface.\n\nYou return an error as the *last* result by convention. The caller receives it and runs the check: `if err != nil`. If this function can't do anything useful about the failure, it returns the error to its own caller — that's the `return err` half of the rhythm. On success, you return the untyped `nil`, which is the empty error slot.",
+      body: 'Now the concrete tools. The standard library gives you two ways to make an error value. `errors.New("message")` builds an error from a fixed string. `fmt.Errorf("...%d...", x)` works like `fmt.Sprintf` but returns an error, so you can fold in details like the offending value. Both hand back something satisfying the `error` interface.\n\nYou return an error as the *last* result by convention. The caller receives it and runs the check: `if err != nil`. If this function can\'t do anything useful about the failure, it returns the error to its own caller — that\'s the `return err` half of the rhythm. On success, you return the untyped `nil`, which is the empty error slot.',
       blocks: [
         {
           type: "example",
           example: {
             title: "Creating and returning errors",
             language: "go",
-            code:
-              'import (\n    "errors"\n    "fmt"\n)\n\n// Fixed message: errors.New.\nfunc withdraw(balanceC, amountC int64) (int64, error) {\n    if amountC <= 0 {\n        return balanceC, errors.New("amount must be positive")\n    }\n    // Message with detail folded in: fmt.Errorf.\n    if amountC > balanceC {\n        return balanceC, fmt.Errorf("insufficient funds: have %d, need %d", balanceC, amountC)\n    }\n    return balanceC - amountC, nil // success: the error slot is nil\n}',
-            takeaway: "errors.New for a fixed message, fmt.Errorf when you want to include values; return nil on success.",
+            code: 'import (\n    "errors"\n    "fmt"\n)\n\n// Fixed message: errors.New.\nfunc withdraw(balanceC, amountC int64) (int64, error) {\n    if amountC <= 0 {\n        return balanceC, errors.New("amount must be positive")\n    }\n    // Message with detail folded in: fmt.Errorf.\n    if amountC > balanceC {\n        return balanceC, fmt.Errorf("insufficient funds: have %d, need %d", balanceC, amountC)\n    }\n    return balanceC - amountC, nil // success: the error slot is nil\n}',
+            takeaway:
+              "errors.New for a fixed message, fmt.Errorf when you want to include values; return nil on success.",
           },
         },
         {
           type: "points",
           items: [
-            "`errors.New(\"msg\")` → an error with a fixed message.",
-            "`fmt.Errorf(\"...%v...\", x)` → an error whose message includes runtime values.",
+            '`errors.New("msg")` → an error with a fixed message.',
+            '`fmt.Errorf("...%v...", x)` → an error whose message includes runtime values.',
             "Error is the last return value; return the untyped `nil` on the success path.",
           ],
         },
@@ -312,12 +241,33 @@ export const goErrorValues: Lesson = {
             title: "An error flows back through returns, one explicit hop at a time",
             kind: "sequence",
             nodes: [
-              { id: "s1", label: "store.Get(id)", detail: "can't find the row → returns (nil, ErrNotFound)", tone: "danger" },
-              { id: "s2", label: "service.Load(id)", detail: "gets err != nil, can't fix it → `return err`", tone: "accent" },
-              { id: "s3", label: "handler.Show(id)", detail: "gets err != nil → turns it into a 404 response", tone: "accent" },
-              { id: "s4", label: "HTTP client", detail: "receives a clear 404, not a crash", tone: "success" },
+              {
+                id: "s1",
+                label: "store.Get(id)",
+                detail: "can't find the row → returns (nil, ErrNotFound)",
+                tone: "danger",
+              },
+              {
+                id: "s2",
+                label: "service.Load(id)",
+                detail: "gets err != nil, can't fix it → `return err`",
+                tone: "accent",
+              },
+              {
+                id: "s3",
+                label: "handler.Show(id)",
+                detail: "gets err != nil → turns it into a 404 response",
+                tone: "accent",
+              },
+              {
+                id: "s4",
+                label: "HTTP client",
+                detail: "receives a clear 404, not a crash",
+                tone: "success",
+              },
             ],
-            caption: "Each layer either handles the error or returns it upward — the failure path is visible at every step.",
+            caption:
+              "Each layer either handles the error or returns it upward — the failure path is visible at every step.",
           },
         },
         {
@@ -326,10 +276,21 @@ export const goErrorValues: Lesson = {
             title: "Go errors vs exceptions",
             kind: "compare",
             nodes: [
-              { id: "go", label: "Go: return an error value", detail: "checked on the next line; failure path is local and visible", tone: "success" },
-              { id: "exc", label: "Exceptions: throw and unwind", detail: "control jumps over code to a distant catch; failure path is hidden", tone: "muted" },
+              {
+                id: "go",
+                label: "Go: return an error value",
+                detail: "checked on the next line; failure path is local and visible",
+                tone: "success",
+              },
+              {
+                id: "exc",
+                label: "Exceptions: throw and unwind",
+                detail: "control jumps over code to a distant catch; failure path is hidden",
+                tone: "muted",
+              },
             ],
-            caption: "Go trades the convenience of throwing for the clarity of handling failure where it happens.",
+            caption:
+              "Go trades the convenience of throwing for the clarity of handling failure where it happens.",
           },
         },
       ],
@@ -342,9 +303,9 @@ export const goErrorValues: Lesson = {
           example: {
             title: "The (result, error) pattern end to end",
             language: "go",
-            code:
-              'import (\n    "fmt"\n    "strconv"\n)\n\n// Returns the amount in cents, or an error explaining the failure.\nfunc parseAmount(s string) (int64, error) {\n    n, err := strconv.ParseInt(s, 10, 64)\n    if err != nil {\n        return 0, fmt.Errorf("amount %q is not a number", s)\n    }\n    if n <= 0 {\n        return 0, fmt.Errorf("amount must be positive, got %d", n)\n    }\n    return n, nil\n}\n\nfunc main() {\n    amountC, err := parseAmount("1500")\n    if err != nil {\n        fmt.Println("rejected:", err) // the caller decides what to do\n        return\n    }\n    fmt.Println("ok, cents:", amountC)\n}',
-            takeaway: "Check the error immediately; only trust the result once you know the error is nil.",
+            code: 'import (\n    "fmt"\n    "strconv"\n)\n\n// Returns the amount in cents, or an error explaining the failure.\nfunc parseAmount(s string) (int64, error) {\n    n, err := strconv.ParseInt(s, 10, 64)\n    if err != nil {\n        return 0, fmt.Errorf("amount %q is not a number", s)\n    }\n    if n <= 0 {\n        return 0, fmt.Errorf("amount must be positive, got %d", n)\n    }\n    return n, nil\n}\n\nfunc main() {\n    amountC, err := parseAmount("1500")\n    if err != nil {\n        fmt.Println("rejected:", err) // the caller decides what to do\n        return\n    }\n    fmt.Println("ok, cents:", amountC)\n}',
+            takeaway:
+              "Check the error immediately; only trust the result once you know the error is nil.",
           },
         },
         {
@@ -358,7 +319,7 @@ export const goErrorValues: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before you read on — a corrected guess sticks better than a skimmed answer. A package defines a sentinel error and returns it:\n\n`var ErrNotFound = errors.New(\"not found\")`\n`func find(id string) error { return ErrNotFound }`\n\nElsewhere, a *second* package also writes `var ErrNotFound = errors.New(\"not found\")` — same exact message. A caller does `if err == find(\"x\") { ... }` comparing the returned error against the *second* package's `ErrNotFound`. Does the comparison hold — `true` or `false`?\n\nIt is **false**. `errors.New` returns a pointer to a new struct each time it's called, and `==` on error interface values compares identity, not message text. The two `ErrNotFound` variables are *different* values that merely share a string. Comparing against a sentinel only works when you compare against the *same* variable the function actually returns — which is why sentinels are exported (`ErrNotFound`) so callers reference the one true value. This is also the seed of the sentinel's downside: it ties every caller to that specific exported variable.",
+      body: 'Predict before you read on — a corrected guess sticks better than a skimmed answer. A package defines a sentinel error and returns it:\n\n`var ErrNotFound = errors.New("not found")`\n`func find(id string) error { return ErrNotFound }`\n\nElsewhere, a *second* package also writes `var ErrNotFound = errors.New("not found")` — same exact message. A caller does `if err == find("x") { ... }` comparing the returned error against the *second* package\'s `ErrNotFound`. Does the comparison hold — `true` or `false`?\n\nIt is **false**. `errors.New` returns a pointer to a new struct each time it\'s called, and `==` on error interface values compares identity, not message text. The two `ErrNotFound` variables are *different* values that merely share a string. Comparing against a sentinel only works when you compare against the *same* variable the function actually returns — which is why sentinels are exported (`ErrNotFound`) so callers reference the one true value. This is also the seed of the sentinel\'s downside: it ties every caller to that specific exported variable.',
     },
     "failure-cases": {
       body: "Error handling in Go goes wrong in a handful of recognizable ways. Learn the signal each one gives.",
@@ -367,8 +328,8 @@ export const goErrorValues: Lesson = {
           type: "points",
           items: [
             "**Ignoring the error** (`v, _ := f()`) → you proceed on data that may be garbage. Only discard an error when you truly don't care.",
-            "**Comparing error strings** (`err.Error() == \"not found\"`) → breaks the instant someone edits the message. Compare against a sentinel value instead.",
-            "**Comparing against the wrong sentinel** → two `errors.New(\"x\")` values are not equal; compare against the exact exported variable the function returns.",
+            '**Comparing error strings** (`err.Error() == "not found"`) → breaks the instant someone edits the message. Compare against a sentinel value instead.',
+            '**Comparing against the wrong sentinel** → two `errors.New("x")` values are not equal; compare against the exact exported variable the function returns.',
             "**A bare string error where the caller needs detail** → the caller can't act, only log. Use a typed error carrying the field/code/value.",
             "**Using panic for ordinary failures** → crashes the program for something a returned error should have handled.",
           ],
@@ -378,9 +339,9 @@ export const goErrorValues: Lesson = {
           example: {
             title: "Fragile string comparison vs. a stable sentinel",
             language: "go",
-            code:
-              'var ErrNotFound = errors.New("account not found")\n\n// FRAGILE: breaks if the message text ever changes.\nif err.Error() == "account not found" { /* ... */ }\n\n// STABLE: compares against the sentinel value itself.\nif err == ErrNotFound { /* ... */ }',
-            takeaway: "Compare against the sentinel value, never against the human-readable message string.",
+            code: 'var ErrNotFound = errors.New("account not found")\n\n// FRAGILE: breaks if the message text ever changes.\nif err.Error() == "account not found" { /* ... */ }\n\n// STABLE: compares against the sentinel value itself.\nif err == ErrNotFound { /* ... */ }',
+            takeaway:
+              "Compare against the sentinel value, never against the human-readable message string.",
           },
         },
       ],
@@ -426,44 +387,12 @@ export const goErrorValues: Lesson = {
           example: {
             title: "A typed error carrying actionable detail",
             language: "go",
-            code:
-              '// Typed error: implements error AND carries fields the caller can use.\ntype ValidationError struct {\n    Field string\n    Value any\n    Msg   string\n}\n\nfunc (e *ValidationError) Error() string {\n    return fmt.Sprintf("%s: %v (%s)", e.Field, e.Value, e.Msg)\n}\n\nfunc validateTransfer(amountC int64) error {\n    if amountC <= 0 {\n        return &ValidationError{Field: "amount", Value: amountC, Msg: "must be positive"}\n    }\n    return nil\n}\n\n// The caller can inspect the detail, not just print it.\nfunc handle(err error) {\n    var ve *ValidationError\n    if errors.As(err, &ve) {\n        fmt.Printf("reject field %s with value %v\\n", ve.Field, ve.Value)\n    }\n}',
-            takeaway: "A typed error lets the caller read the field and value and build a precise response — a sentinel couldn't.",
+            code: '// Typed error: implements error AND carries fields the caller can use.\ntype ValidationError struct {\n    Field string\n    Value any\n    Msg   string\n}\n\nfunc (e *ValidationError) Error() string {\n    return fmt.Sprintf("%s: %v (%s)", e.Field, e.Value, e.Msg)\n}\n\nfunc validateTransfer(amountC int64) error {\n    if amountC <= 0 {\n        return &ValidationError{Field: "amount", Value: amountC, Msg: "must be positive"}\n    }\n    return nil\n}\n\n// The caller can inspect the detail, not just print it.\nfunc handle(err error) {\n    var ve *ValidationError\n    if errors.As(err, &ve) {\n        fmt.Printf("reject field %s with value %v\\n", ve.Field, ve.Value)\n    }\n}',
+            takeaway:
+              "A typed error lets the caller read the field and value and build a precise response — a sentinel couldn't.",
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "LedgerFlow's whole reliability story rests on actionable errors. The domain layer validates a transfer and returns an error the caller can act on — not a logged message, but a value carrying *what* was wrong. When an amount isn't positive, `validateTransfer` returns a typed `ValidationError` with the field and the offending value, so the HTTP handler can turn it into a precise 400 response naming the exact field.\n\nThe store layer uses a sentinel for a plain 'which kind' failure: `var ErrAccountNotFound = errors.New(\"account not found\")`. The service compares against it with `==` and maps it to a 404. The split is deliberate: 'not found' only needs identity, so a sentinel suffices; 'invalid amount' needs the value, so it's typed. In both cases the service follows the rhythm — `if err != nil { return err }` — passing failures up to the handler, the one layer that knows how to speak HTTP.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Sentinel + typed errors in the LedgerFlow store and domain",
-            language: "go",
-            code:
-              '// Sentinel: the caller only needs to know "not found".\nvar ErrAccountNotFound = errors.New("account not found")\n\nfunc (s *Store) Get(id string) (*Account, error) {\n    a, ok := s.accounts[id]\n    if !ok {\n        return nil, ErrAccountNotFound\n    }\n    return a, nil\n}\n\n// Typed: the caller needs the field and value to build a response.\ntype ValidationError struct {\n    Field string\n    Value any\n}\n\nfunc (e *ValidationError) Error() string {\n    return fmt.Sprintf("invalid %s: %v", e.Field, e.Value)\n}\n\nfunc validateTransfer(amountC int64) error {\n    if amountC <= 0 {\n        return &ValidationError{Field: "amount", Value: amountC}\n    }\n    return nil\n}',
-            takeaway: "Sentinel for 'which failure' (not found → 404), typed error for 'what was wrong' (bad amount → 400 with the field).",
-          },
-        },
-        {
-          type: "diagram",
-          diagram: {
-            title: "How an error becomes an HTTP response",
-            kind: "flow",
-            nodes: [
-              { id: "store", label: "store.Get", detail: "returns ErrAccountNotFound (sentinel)", tone: "danger" },
-              { id: "svc", label: "service", detail: "if err != nil { return err }", tone: "accent" },
-              { id: "handler", label: "handler", detail: "== ErrAccountNotFound → 404", tone: "success" },
-              { id: "client", label: "client", detail: "gets an actionable 404" },
-            ],
-            caption: "The error value travels up the layers; only the handler translates it into HTTP.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice turns 'I follow this' into 'I can build and choose it'. Work across prediction, code-reading, implementation, debugging, refactoring, design, and one advanced strategy problem. The sentinel-vs-typed choice is the one worth slowing down on: it's a design judgment you'll make in almost every package you write, and the right answer always comes from asking what the caller must *do*.",
     },
     mastery: {
       body: "You've mastered this lesson when four signals hold without notes: you can explain that `error` is a one-method interface and that Go returns errors as values instead of throwing them; create errors with errors.New and fmt.Errorf and return them with the `if err != nil { return err }` rhythm; predict what comparing an error against a sentinel yields and why string comparison is fragile; and choose between a sentinel and a typed error by what the caller needs to do. Check a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
