@@ -23,11 +23,6 @@ export const goGenerics: Lesson = {
     "Decide when generics genuinely remove duplication and when a single concrete type or a plain interface is the better choice",
   ],
   concepts: ["generics", "type-parameters", "constraints", "inference"],
-  ledgerFlowApplications: [
-    "Build a generic, type-safe Result[T] helper so every fallible call carries either a value or an error without per-type boilerplate",
-    "Write one Map/Filter over slices of transactions, accounts, or amounts instead of copy-pasting a loop per type",
-    "Constrain a Sum helper to a numeric type set so it totals int64 cents but refuses to compile on a string",
-  ],
   references: [
     {
       title: "Tutorial: Getting started with generics",
@@ -36,7 +31,7 @@ export const goGenerics: Lesson = {
         "A hands-on walkthrough that builds a generic Sum function step by step, introducing type parameters and constraints from scratch.",
       relevance:
         "The gentlest official path through exactly the syntax and ideas this lesson teaches.",
-      required: true,
+      required: false,
       section: "Add a generic function; Add a type parameter; Declare a type constraint",
     },
     {
@@ -46,7 +41,7 @@ export const goGenerics: Lesson = {
         "The judgment call: which situations genuinely benefit from type parameters and which are better served by a plain interface or a single concrete type.",
       relevance:
         "The authoritative source behind this lesson's 'when NOT to use generics' stages — the part beginners most often get wrong.",
-      required: true,
+      required: false,
       section: "When are type parameters useful; When are they not",
     },
     {
@@ -65,7 +60,7 @@ export const goGenerics: Lesson = {
       id: "go3ge-predict-infer",
       type: "prediction",
       prompt:
-        "Given `func First[T any](s []T) T { return s[0] }`, predict the type of `x` in `x := First([]int{1, 2, 3})` and in `y := First([]string{\"a\"})`, and say whether you had to write the type argument yourself.",
+        'Given `func First[T any](s []T) T { return s[0] }`, predict the type of `x` in `x := First([]int{1, 2, 3})` and in `y := First([]string{"a"})`, and say whether you had to write the type argument yourself.',
       expectedAnswer:
         "x is int and y is string. You write neither type argument — the compiler infers T from the slice element type.",
       hints: [
@@ -190,80 +185,8 @@ export const goGenerics: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The instinct many newcomers reach for is `any` (the empty interface). 'I'll just accept any value and figure out the type inside.' It compiles, so it feels fine.\n\nThe trouble is that `any` erases what you know. The moment a value is stored as `any`, the compiler no longer knows it's an `int`, so you can't add it, compare it, or index it without first asserting `v.(int)` — and if you assert the wrong type, your program panics at runtime. You've moved a whole class of errors from compile time (cheap, safe) to runtime (expensive, in production).",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "any throws away type safety",
-            language: "go",
-            code: 'func SumAny(nums []any) any {\n\ttotal := 0\n\tfor _, n := range nums {\n\t\ttotal += n.(int) // assertion: panics if n is not an int\n\t}\n\treturn total\n}\n\n// SumAny([]any{1, 2, "oops"}) compiles fine, then PANICS at runtime.',
-            takeaway:
-              "With any, the compiler can't stop you passing a string. The mistake surfaces only when the code runs.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "`any` accepts everything, so the compiler can prove nothing about the value.",
-            "You pay with type assertions and the runtime panics they invite.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The `any` approach doesn't just risk panics — it hides real bugs behind code that *looks* correct. A signature like `func Process(items []any) any` tells a caller nothing: what can I pass? what do I get back? The types that used to document your intent are gone.\n\nThe duplication approach fails differently but just as surely. Two copies of `Max` start identical; six months later someone fixes an edge case in the `int` version and forgets the `float64` one. Now they silently disagree. Neither escape hatch is safe — the failure is having no way to say 'same logic, different type' directly.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The copy that drifted",
-            context:
-              "A team keeps SumInts and SumFloats side by side. A rounding fix lands in SumFloats during a rush. Weeks later a report built on SumInts is off, and no one connects it to the 'unrelated' fix.",
-            insight:
-              "The two functions were never truly separate — they were one idea copied twice. Generics would have made them a single source of truth.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the shift in thinking. A normal function is parameterised by *values*: you pass in `3` and `4`, it works on those numbers. A generic function is *also* parameterised by a **type**: you (or the compiler) pass in `int`, and the function specialises to work on ints.\n\nSo a type parameter is just another kind of input — but one that's chosen at compile time, not runtime. Written `[T any]`, it reads as 'let `T` stand for some type; the caller decides which.' Inside the function you use `T` exactly like any other type name. When someone calls it with an `int` slice, `T` *is* `int` for that call, and the compiler checks everything as if you'd written `int` by hand.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "Two kinds of parameters",
-            kind: "compare",
-            nodes: [
-              {
-                id: "value",
-                label: "Value parameters",
-                detail: "func Add(a, b int) — you pass values like 3 and 4",
-              },
-              {
-                id: "type",
-                label: "Type parameters",
-                detail: "func Max[T any](a, b T) — you (or the compiler) pass a type like int",
-                tone: "accent",
-              },
-            ],
-            caption:
-              "Generics add a second slot: the type itself becomes an input, filled in at compile time.",
-          },
-        },
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "Read it out loud",
-            text: "`func Map[T any, U any](s []T, f func(T) U) []U` reads as: 'for any two types T and U, take a slice of T and a function from T to U, and give back a slice of U.'",
-          },
-        },
-      ],
-    },
     "mental-model": {
-      body: "Two ideas carry this whole lesson.\n\nFirst, **a type parameter is a placeholder type the caller fills in.** You declare it in square brackets before the value parameters: `func Name[T any](...)`. Inside, `T` behaves like a real type.\n\nSecond — and this is the part beginners miss — **a constraint is a *set of types*, and it decides what you're allowed to do with a value of that type.** The constraint `any` permits every type but promises no operations (you can pass it around, that's all). The constraint `comparable` is the set of types that support `==` and `!=`. A custom constraint like `Number` names an explicit set (`int`, `float64`, …) and thereby permits arithmetic. The rule of thumb: *you can only do to a `T` what its constraint guarantees every type in the set can do.*",
+      body: "Two ideas carry this whole lesson.\n\nFirst, **a type parameter is a placeholder type the caller fills in.** You declare it in square brackets before the value parameters: `func Name[T any](...)`. Inside, `T` behaves like a real type.\n\nSecond — and this is the part beginners miss — **a constraint is a *set of types*, and it decides what you're allowed to do with a value of that type. ** The constraint `any` permits every type but promises no operations (you can pass it around, that's all). The constraint `comparable` is the set of types that support `==` and `! =`.\n\nA custom constraint like `Number` names an explicit set (`int`, `float64`, …) and thereby permits arithmetic. The rule of thumb: *you can only do to a `T` what its constraint guarantees every type in the set can do. *",
       blocks: [
         {
           type: "note",
@@ -284,14 +207,14 @@ export const goGenerics: Lesson = {
       ],
     },
     mechanics: {
-      body: "Now the precise rules. You declare type parameters in square brackets immediately after the function name, each with a constraint: `func Map[T any, U any](s []T, f func(T) U) []U`. Every type parameter *must* have a constraint — `any` is the do-nothing constraint you use when the body doesn't need any special operation.\n\nA **constraint** is written as an interface, but with a twist. Alongside (or instead of) methods, its body can list a *type set* using `|`: `int | int64 | float64`. A type satisfies the constraint if it's in that set. Prefix an element with `~` — as in `~int` — to mean 'any type whose **underlying type** is `int`'. That matters because a named type like `type Cents int64` has underlying type `int64`; `~int64` includes it, plain `int64` does not. Finally, `comparable` is a built-in constraint for the set of types usable with `==`, and it's what you need whenever your generic code compares values.",
+      body: "Now the precise rules. You declare type parameters in square brackets immediately after the function name, each with a constraint: `func Map[T any, U any](s []T, f func(T) U) []U`. Every type parameter *must* have a constraint — `any` is the do-nothing constraint you use when the body doesn't need any special operation.\n\nA **constraint** is written as an interface, but with a twist. Alongside (or instead of) methods, its body can list a *type set* using `|`: `int | int64 | float64`. A type satisfies the constraint if it's in that set. Prefix an element with `~` — as in `~int` — to mean 'any type whose **underlying type** is `int`'.\n\nThat matters because a named type like `type Cents int64` has underlying type `int64`; `~int64` includes it, plain `int64` does not. Finally, `comparable` is a built-in constraint for the set of types usable with `==`, and it's what you need whenever your generic code compares values.",
       blocks: [
         {
           type: "example",
           example: {
             title: "A custom constraint as a type set",
             language: "go",
-            code: 'type Number interface {\n\t~int | ~int64 | ~float64\n}\n\n// Sum works for any type in the Number set — and any named\n// type built on those, thanks to ~.\nfunc Sum[T Number](nums []T) T {\n\tvar total T // zero value of T\n\tfor _, n := range nums {\n\t\ttotal += n // legal: every type in Number supports +\n\t}\n\treturn total\n}\n\ntype Cents int64\n_ = Sum([]Cents{100, 250}) // ok: Cents has underlying type int64',
+            code: "type Number interface {\n\t~int | ~int64 | ~float64\n}\n\n// Sum works for any type in the Number set — and any named\n// type built on those, thanks to ~.\nfunc Sum[T Number](nums []T) T {\n\tvar total T // zero value of T\n\tfor _, n := range nums {\n\t\ttotal += n // legal: every type in Number supports +\n\t}\n\treturn total\n}\n\ntype Cents int64\nvar _ = Sum([]Cents{100, 250}) // ok: Cents has underlying type int64",
             takeaway:
               "The `+` is only allowed because *every* type in the Number set supports it. `~int64` is what lets the named type Cents qualify.",
           },
@@ -363,7 +286,7 @@ export const goGenerics: Lesson = {
           example: {
             title: "Contains needs comparable, not any",
             language: "go",
-            code: '// == is only allowed because T is constrained to comparable.\nfunc Contains[T comparable](s []T, target T) bool {\n\tfor _, v := range s {\n\t\tif v == target {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}',
+            code: "// == is only allowed because T is constrained to comparable.\nfunc Contains[T comparable](s []T, target T) bool {\n\tfor _, v := range s {\n\t\tif v == target {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}",
             takeaway:
               "Choose the *narrowest* constraint that permits what you do. Comparing values needs comparable; `any` would not compile.",
           },
@@ -371,7 +294,7 @@ export const goGenerics: Lesson = {
       ],
     },
     experiment: {
-      body: "Before reading on, commit to a prediction — a corrected wrong guess sticks better than a right answer you skimmed.\n\nSuppose you write `func Contains[T any](s []T, target T) bool { ... v == target ... }` using the constraint `any` instead of `comparable`. Will it compile? Decide now, then reveal.\n\nThe answer is **no, it does not compile.** The error is roughly `invalid operation: v == target (incomparable types in type set)`. Here's why: the constraint `any` is the set of *all* types, and not all types support `==` — a slice, a map, or a function value can't be compared. Because `any` can't promise every possible `T` supports `==`, the compiler refuses the operation for the whole function, even though the `int` you had in mind would have been fine. Switch the constraint to `comparable` and it compiles, because now `T` is restricted to exactly the types where `==` is legal. This is the mental-model rule in action: *you can only do to a `T` what its constraint guarantees for every type in the set.*",
+      body: "Before reading on, commit to a prediction — a corrected wrong guess sticks better than a right answer you skimmed.\n\nSuppose you write `func Contains[T any](s []T, target T) bool { ... v == target ... }` using the constraint `any` instead of `comparable`. Will it compile? Decide now, then reveal.\n\nThe answer is **no, it does not compile. ** The error is roughly `invalid operation: v == target (incomparable types in type set)`. Here's why: the constraint `any` is the set of *all* types, and not all types support `==` — a slice, a map, or a function value can't be compared.\n\nBecause `any` can't promise every possible `T` supports `==`, the compiler refuses the operation for the whole function, even though the `int` you had in mind would have been fine. Switch the constraint to `comparable` and it compiles, because now `T` is restricted to exactly the types where `==` is legal.\n\nThis is the mental-model rule in action: *you can only do to a `T` what its constraint guarantees for every type in the set. *",
     },
     "failure-cases": {
       body: "Most generics trouble at this level comes from a short list of recurring mistakes. Here they are with the signal each one gives.",
@@ -391,7 +314,7 @@ export const goGenerics: Lesson = {
           example: {
             title: "When inference can't help you",
             language: "go",
-            code: 'func Zero[T any]() T {\n\tvar z T\n\treturn z\n}\n\n// x := Zero()      // ERROR: cannot infer T (it\'s only in the return)\nx := Zero[int]()    // ok: you supply the type argument\n_ = x',
+            code: "func Zero[T any]() T {\n\tvar z T\n\treturn z\n}\n\nfunc example() {\n    // x := Zero()   // ERROR: cannot infer T (it's only in the return)\n    x := Zero[int]() // ok: you supply the type argument\n    _ = x\n}",
             takeaway:
               "Inference works from the arguments. If T shows up only in the result, the caller must name it — a hint the API may want an argument or a concrete type.",
           },
@@ -435,32 +358,6 @@ export const goGenerics: Lesson = {
           ],
         },
       ],
-    },
-    ledgerflow: {
-      body: "Here's the lesson applied to the project you'll build. LedgerFlow constantly transforms and filters collections — transactions, accounts, amounts — and many operations can fail. Two generic helpers earn their place. A `Result[T]` type carries either a value or an error uniformly, so a batch of pending parses can be stored and inspected without a bespoke struct per type. And a single `Map`/`Filter` over slices replaces a loop copied for every element type. Note the discipline: `Result` and the collection helpers are genuinely reused across types, which is exactly when generics pay off — a per-account report that only ever handles one type would stay a plain function.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "A generic, type-safe Result helper",
-            language: "go",
-            code: 'type Result[T any] struct {\n\tvalue T\n\terr   error\n}\n\nfunc Ok[T any](v T) Result[T]  { return Result[T]{value: v} }\nfunc Err[T any](e error) Result[T] { return Result[T]{err: e} }\n\nfunc (r Result[T]) Unwrap() (T, error) { return r.value, r.err }\n\n// Parsing a user-entered amount into exact int64 cents:\nfunc parseCents(s string) Result[int64] {\n\tcents, err := strconv.ParseInt(s, 10, 64)\n\tif err != nil {\n\t\treturn Err[int64](err)\n\t}\n\treturn Ok(cents)\n}',
-            takeaway:
-              "One Result[T] serves int64 cents, AccountID, or any type — value or error, checked by the compiler, with no per-type boilerplate.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "`Result[T]` unifies fallible outcomes across every domain type.",
-            "One `Map`/`Filter` replaces a per-type loop for transactions, accounts, amounts.",
-            "Use generics where the reuse is real; keep single-type helpers plain.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize this' into 'I can predict and build this.' Work across prediction, code-reading, implementation, debugging, refactoring, and design — each produces a different kind of evidence, so finishing one doesn't cover the rest. Pay special attention to the design exercise on *when not* to reach for generics; that judgment is what separates using the feature from overusing it.",
     },
     mastery: {
       body: "You've mastered this lesson when you can do four things without notes: explain that a constraint is a set of types and say what `any`, `comparable`, and `~int` each allow; predict the inferred type parameters of a generic call with no written type argument; write a generic function like `Map` that compiles and stays type-safe; and defend a choice between a type parameter, a plain interface, and a single concrete type. Check a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",

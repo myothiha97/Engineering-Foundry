@@ -23,26 +23,24 @@ export const goAssertionsSwitches: Lesson = {
     "Decide when to design with interfaces versus reaching for an assertion at a boundary",
   ],
   concepts: ["type-assertion", "type-switch"],
-  ledgerFlowApplications: [
-    "Dispatch on ledger event types (Deposit, Withdrawal, Transfer) decoded from a stream",
-    "Feature-detect whether a store also implements an optional Snapshotter capability",
-    "Safely unpack values decoded as any from JSON without crashing on an unexpected shape",
-  ],
   references: [
     {
       title: "The Go Programming Language Specification: Type assertions",
       url: "https://go.dev/ref/spec#Type_assertions",
-      teaches: "The normative rule for x.(T): when it succeeds, what it yields, and when it panics.",
-      relevance: "The authoritative definition behind the single-return and comma-ok forms in this lesson.",
-      required: true,
+      teaches:
+        "The normative rule for x.(T): when it succeeds, what it yields, and when it panics.",
+      relevance:
+        "The authoritative definition behind the single-return and comma-ok forms in this lesson.",
+      required: false,
       section: "Type assertions",
     },
     {
       title: "The Go Programming Language Specification: Type switches",
       url: "https://go.dev/ref/spec#Type_switches",
-      teaches: "How switch x.(type) compares an interface value's dynamic type against each case, including nil.",
+      teaches:
+        "How switch x.(type) compares an interface value's dynamic type against each case, including nil.",
       relevance: "Confirms the exact semantics of the type switch used throughout this lesson.",
-      required: true,
+      required: false,
       section: "Type switches",
     },
     {
@@ -80,7 +78,7 @@ export const goAssertionsSwitches: Lesson = {
       id: "go3ts-implement-describe",
       type: "implementation",
       prompt:
-        "Implement describe so it returns \"int\", \"string\", or \"other\" depending on the dynamic type of its any argument.",
+        'Implement describe so it returns "int", "string", or "other" depending on the dynamic type of its any argument.',
       starterCode:
         'package main\n\nimport "fmt"\n\nfunc describe(x any) string {\n  // branch on the dynamic type of x\n  return ""\n}\n\nfunc main() {\n  fmt.Println(describe(3))      // want: int\n  fmt.Println(describe("hi"))   // want: string\n  fmt.Println(describe(true))   // want: other\n}',
       expectedAnswer:
@@ -94,7 +92,7 @@ export const goAssertionsSwitches: Lesson = {
       id: "go3ts-debug-panic",
       type: "debugging",
       prompt:
-        "This panics at runtime: `var x any = \"hello\"` then `n := x.(int)`. Explain the panic and fix it so a mismatch is handled instead of crashing.",
+        'This panics at runtime: `var x any = "hello"` then `n := x.(int)`. Explain the panic and fix it so a mismatch is handled instead of crashing.',
       hints: [
         "The single-return assertion panics when the dynamic type does not match.",
         "Switch to the comma-ok form and check ok before using the value.",
@@ -183,78 +181,6 @@ export const goAssertionsSwitches: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The instinct many newcomers have is: 'I know what's in there, so I'll just take it out.' In Go that looks like `n := x.(int)` — the single-return **type assertion**. It reads like a cast: give me the `int` inside `x`.\n\nThe trap is what happens when you're wrong. If `x` does *not* actually hold an `int`, this form doesn't return an error or a zero — it **panics**, crashing the program at that line. So the naive version works perfectly in your tests, where you control the input, and then blows up in production the first time a value has an unexpected shape.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "The single-return assertion panics on a miss",
-            language: "go",
-            code: 'var x any = "hello"\n\nn := x.(int) // panic: interface conversion: interface {} is string, not int\nfmt.Println(n)',
-            takeaway:
-              "`x.(int)` demands an int. Because x is really a string, the program panics right here instead of giving you a bad value.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "`x.(T)` (single return) **panics** if x's dynamic type isn't T.",
-            "It's only safe when you can *prove* the type — otherwise it's a crash waiting to happen.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The reason the single-return form is dangerous is that the risky input usually comes from *outside* your code — a decoded request body, a config file, a plugin. Those are exactly the places you can't guarantee the type, and exactly the places a panic hurts most: one malformed message takes down the whole handler.\n\nThe failure isn't the assertion itself; it's using the form that can't fail gracefully in a spot where failure is normal. Go gives you a second form precisely for this: one that *reports* whether the type matched instead of crashing.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The handler that crashes on one bad field",
-            context:
-              "A service decodes JSON into `map[string]any` and reads the amount with `amt := m[\"amount\"].(float64)`. Most clients send a number, but one sends the amount as a quoted string. That single request panics, and because the panic unwinds the goroutine, the request dies with a 500 and a stack trace instead of a clean 400.",
-            insight:
-              "The value came from an untrusted boundary, so a mismatch is expected input — not a bug. The single-return assertion turned normal bad input into a crash.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental shift. Instead of *demanding* a type and hoping, you *ask* for it and get a yes/no answer back. That's the **comma-ok** form: `v, ok := x.(T)`. If the thing inside really is a `T`, then `ok` is `true` and `v` is that value. If it isn't, `ok` is `false` and `v` is the zero value of `T` — and nothing panics.\n\nSo the two forms are the same question with different manners. `x.(T)` says 'this had better be a T'; `v, ok := x.(T)` says 'is this a T? tell me either way'. At any boundary you don't control, you want the polite one.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "Two forms of the same assertion",
-            kind: "compare",
-            nodes: [
-              {
-                id: "single",
-                label: "x.(T) — single return",
-                detail: "Match: gives the value. Miss: PANICS.",
-                tone: "danger",
-              },
-              {
-                id: "commaok",
-                label: "v, ok := x.(T) — comma-ok",
-                detail: "Match: v = value, ok = true. Miss: v = zero, ok = false. Never panics.",
-                tone: "success",
-              },
-            ],
-            caption: "Same question — 'is x really a T?' — but only the comma-ok form lets you handle 'no' yourself.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "`v, ok := x.(T)` never panics — it reports the outcome in `ok`.",
-            "On a miss, `v` is T's zero value, so it's safe to read (just don't trust it).",
-            "Use comma-ok at any boundary; use the single-return form only when a mismatch would be a real bug.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
       body: "Keep one picture in mind: **an interface value is a pair — (dynamic type, value).** A type assertion compares the *dynamic type* against the type you name. That comparison has exactly one honest answer, and the comma-ok form hands it to you as a boolean.\n\nWhen you have more than one possible type to check, don't write a ladder of comma-ok assertions — use a **type switch**. It's the same comparison, done once against several candidate types, and it binds the matched value to the right type in each branch. Think of it as a normal `switch`, except each `case` names a *type* instead of a value.",
       blocks: [
@@ -272,7 +198,8 @@ export const goAssertionsSwitches: Lesson = {
             title: "One assertion vs many, side by side",
             language: "go",
             code: '// One type in question — comma-ok:\nif n, ok := x.(int); ok {\n    fmt.Println("an int:", n)\n}\n\n// Several types in question — type switch:\nswitch v := x.(type) {\ncase int:\n    fmt.Println("int", v)\ncase string:\n    fmt.Println("string of length", len(v))\n}',
-            takeaway: "The type switch is the comma-ok pattern generalized to many types, without the repetition.",
+            takeaway:
+              "The type switch is the comma-ok pattern generalized to many types, without the repetition.",
           },
         },
       ],
@@ -287,11 +214,21 @@ export const goAssertionsSwitches: Lesson = {
             kind: "flow",
             nodes: [
               { id: "iface", label: "interface value x", detail: "(dynamic type, value)" },
-              { id: "ask", label: "x.(T)", detail: "is the dynamic type T (or does it implement T)?" },
+              {
+                id: "ask",
+                label: "x.(T)",
+                detail: "is the dynamic type T (or does it implement T)?",
+              },
               { id: "match", label: "match?", detail: "compared at runtime", tone: "accent" },
-              { id: "out", label: "value of type T", detail: "or (zero, false) / panic on miss", tone: "success" },
+              {
+                id: "out",
+                label: "value of type T",
+                detail: "or (zero, false) / panic on miss",
+                tone: "success",
+              },
             ],
-            caption: "T can be concrete (exact match) or an interface (implements it). The form you chose decides how a miss is reported.",
+            caption:
+              "T can be concrete (exact match) or an interface (implements it). The form you chose decides how a miss is reported.",
           },
         },
         {
@@ -300,7 +237,8 @@ export const goAssertionsSwitches: Lesson = {
             title: "A type switch with nil and default",
             language: "go",
             code: 'func kind(x any) string {\n    switch v := x.(type) {\n    case nil:\n        return "nil"\n    case int:\n        return fmt.Sprintf("int %d", v)   // v is an int here\n    case string:\n        return fmt.Sprintf("string %q", v) // v is a string here\n    default:\n        return fmt.Sprintf("other %T", v)  // v keeps type any\n    }\n}',
-            takeaway: "Each case rebinds v to the matched type. The nil arm catches an empty interface; default catches the rest.",
+            takeaway:
+              "Each case rebinds v to the matched type. The nil arm catches an empty interface; default catches the rest.",
           },
         },
         {
@@ -324,8 +262,17 @@ export const goAssertionsSwitches: Lesson = {
             nodes: [
               { id: "nil", label: "case nil:", detail: "matches when the interface holds no type" },
               { id: "int", label: "case int:", detail: "v is an int inside this arm" },
-              { id: "str", label: "case string:", detail: "v is a string inside this arm", tone: "accent" },
-              { id: "def", label: "default:", detail: "everything else; v keeps the interface type" },
+              {
+                id: "str",
+                label: "case string:",
+                detail: "v is a string inside this arm",
+                tone: "accent",
+              },
+              {
+                id: "def",
+                label: "default:",
+                detail: "everything else; v keeps the interface type",
+              },
             ],
             caption: "The dynamic type picks exactly one arm — top to bottom, first match wins.",
           },
@@ -365,7 +312,7 @@ export const goAssertionsSwitches: Lesson = {
           type: "points",
           items: [
             "**Single-return form on untrusted input** → a runtime panic. Use comma-ok and handle the miss.",
-            "**Asserting the wrong numeric type** → JSON gives `float64`, not `int`; `m[\"n\"].(int)` fails. Assert `float64` then convert.",
+            '**Asserting the wrong numeric type** → generic JSON uses `float64` by default, so `m["n"].(int)` fails. Assert `float64`, use `Decoder.UseNumber`, or decode a typed struct.',
             "**Expecting narrowing in a multi-type case** → `case int, int64:` leaves `v` as the interface type, not int.",
             "**Forgetting `case nil:`** → a nil interface falls through to `default`, which is often not what you meant.",
             "**Asserting on a nil interface with single-return** → `var x any; x.(int)` panics; comma-ok returns `(0, false)`.",
@@ -374,10 +321,11 @@ export const goAssertionsSwitches: Lesson = {
         {
           type: "example",
           example: {
-            title: "JSON numbers are float64, not int",
+            title: "Generic JSON numbers are float64 by default",
             language: "go",
             code: 'var m map[string]any // from json.Unmarshal\n// m["amount"] holds a float64, even for 100\n\n// n := m["amount"].(int)   // panics: it\'s a float64\nf, ok := m["amount"].(float64)\nif ok {\n    cents := int64(f * 100) // convert on purpose\n    _ = cents\n}',
-            takeaway: "Decoded JSON numbers are always float64. Assert to float64, then convert — asserting to int panics.",
+            takeaway:
+              "Unmarshal uses float64 for generic numbers by default. Decoder.UseNumber can preserve json.Number; a typed struct avoids the assertion entirely.",
           },
         },
       ],
@@ -418,32 +366,6 @@ export const goAssertionsSwitches: Lesson = {
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "Here's the lesson applied to the project you'll build. LedgerFlow ingests a stream of events, each decoded into an `Event` interface value: a `Deposit`, a `Withdrawal`, or a `Transfer`. To apply each one to the running balance, the ledger uses a **type switch** on the concrete event type, binding `v` to the right struct in each arm so it can read that event's specific fields. Because the events arrive from a decoder, this is a genuine boundary — the switch also handles unknown types safely rather than trusting every message.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Dispatching on ledger event types",
-            language: "go",
-            code: 'type Event interface{ isEvent() }\n\ntype Deposit struct{ AmountC int64 }\ntype Withdrawal struct{ AmountC int64 }\ntype Transfer struct{ AmountC int64; To string }\n\nfunc (Deposit) isEvent()    {}\nfunc (Withdrawal) isEvent() {}\nfunc (Transfer) isEvent()   {}\n\nfunc apply(balanceC int64, e Event) (int64, error) {\n    switch v := e.(type) {\n    case Deposit:\n        return balanceC + v.AmountC, nil\n    case Withdrawal:\n        return balanceC - v.AmountC, nil\n    case Transfer:\n        return balanceC - v.AmountC, nil // v.To also available here\n    default:\n        return balanceC, fmt.Errorf("unknown event %T", v)\n    }\n}',
-            takeaway:
-              "The type switch binds v to each concrete event so you can read its fields, and the default arm rejects unknown events instead of panicking.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Events decode into an `Event` interface; the ledger switches on the concrete type.",
-            "Each arm reads that event's own fields via the narrowed `v`.",
-            "The `default` arm turns an unexpected type into an error, not a crash.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize this' into 'I can predict and build this'. Work across prediction, code-reading, implementation, debugging, refactoring, and design — each produces a different kind of evidence, so finishing one doesn't cover the rest.",
     },
     mastery: {
       body: "You've mastered this lesson when you can do four things without notes: explain how the single-return and comma-ok forms differ and when each panics, predict which arm of a type switch runs (including for nil), write a type switch that dispatches cleanly on several types, and defend a choice between interface-based design and assertion-based dispatch. Check a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
