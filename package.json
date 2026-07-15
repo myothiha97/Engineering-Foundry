@@ -15,6 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "content:validate": "node --import tsx scripts/validate-content.ts",
+    "content:audit-go-syntax": "node --import tsx scripts/audit-go-snippets.ts",
     "db:generate": "pnpm --filter @platform/database db:generate",
     "db:migrate": "pnpm --filter @platform/database db:migrate",
     "db:seed": "pnpm --filter @platform/database db:seed",

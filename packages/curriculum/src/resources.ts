@@ -1,136 +1,105 @@
 import type { Resource } from "@platform/content-schema";
 
 /**
- * Curated, widely-recommended Go resources shown in the portal's Resources hub.
- * Popular GitHub repositories plus the official interactive docs. Star counts are
- * rough display hints, not live data.
+ * A deliberately small companion shelf. The lab is the primary explanation;
+ * these links provide another example, practice, or an authoritative lookup.
  */
 export const goResources: Resource[] = [
   {
-    label: "A Tour of Go",
+    label: "Official: Getting started with Go",
+    url: "https://go.dev/doc/tutorial/getting-started",
+    kind: "doc",
+    description: "The official first-program tutorial. Use this before the deeper reference pages.",
+  },
+  {
+    label: "Official: A Tour of Go",
     url: "https://go.dev/tour/",
     kind: "playground",
-    description: "The official interactive tour — run Go in the browser, concept by concept.",
+    description: "Run short official examples in the browser after learning each core topic here.",
   },
   {
-    label: "Go by Example",
+    label: "Official: The Go Playground",
+    url: "https://go.dev/play/",
+    kind: "playground",
+    description: "A zero-setup place to change a small program and immediately run it.",
+  },
+  {
+    label: "Community: Go by Example",
     url: "https://gobyexample.com/",
     kind: "doc",
-    description: "Hands-on, annotated example programs for nearly every language feature.",
+    description: "A quick second example when you want to see one Go feature in isolation.",
   },
   {
-    label: "Effective Go",
-    url: "https://go.dev/doc/effective_go",
-    kind: "doc",
-    description: "How to write clear, idiomatic Go — the canonical style reference.",
-  },
-  {
-    label: "The Go Programming Language Specification",
-    url: "https://go.dev/ref/spec",
-    kind: "doc",
-    description: "The normative language rules: types, initialization, and execution.",
-  },
-  {
-    label: "golang/go",
-    url: "https://github.com/golang/go",
-    kind: "repo",
-    description: "The Go language, compiler, runtime, and standard library source.",
-    stars: "126k",
-  },
-  {
-    label: "avelino/awesome-go",
-    url: "https://github.com/avelino/awesome-go",
-    kind: "repo",
-    description: "A massive curated list of Go frameworks, libraries, and tools.",
-    stars: "140k",
-  },
-  {
-    label: "quii/learn-go-with-tests",
+    label: "Community: Learn Go with Tests",
     url: "https://github.com/quii/learn-go-with-tests",
     kind: "repo",
-    description: "Learn Go (and TDD) by writing tests first — beginner-friendly and thorough.",
-    stars: "23k",
+    description: "A beginner-friendly, exercise-led path that teaches Go by writing small tests.",
   },
   {
-    label: "inancgumus/learngo",
-    url: "https://github.com/inancgumus/learngo",
-    kind: "repo",
-    description: "1000+ hands-on Go exercises and examples, from basics to advanced.",
-    stars: "20k",
+    label: "Official: Create a Go module",
+    url: "https://go.dev/doc/tutorial/create-module",
+    kind: "doc",
+    description:
+      "The official step-by-step module tutorial; use it after functions and basic types.",
   },
   {
-    label: "tmrts/go-patterns",
-    url: "https://github.com/tmrts/go-patterns",
-    kind: "repo",
-    description: "Idiomatic design, creational, and concurrency patterns in Go.",
-    stars: "24k",
+    label: "Official: Standard library packages",
+    url: "https://pkg.go.dev/std",
+    kind: "doc",
+    description:
+      "Look up packages such as fmt, strings, slices, maps, net/http, and testing as needed.",
   },
   {
-    label: "uber-go/guide",
-    url: "https://github.com/uber-go/guide",
-    kind: "repo",
-    description: "Uber's widely-adopted Go style guide with rationale for each rule.",
-    stars: "17k",
-  },
-  {
-    label: "golang-standards/project-layout",
-    url: "https://github.com/golang-standards/project-layout",
-    kind: "repo",
-    description: "A common (community) layout for structuring real Go applications.",
-    stars: "51k",
-  },
-  {
-    label: "The Go Blog",
-    url: "https://go.dev/blog/",
-    kind: "article",
-    description: "Authoritative deep-dives from the Go team on slices, errors, concurrency, GC, and more.",
-  },
-  {
-    label: "How to Write Go Code",
+    label: "Official: How to Write Go Code",
     url: "https://go.dev/doc/code",
     kind: "doc",
-    description: "The canonical guide to organizing packages, modules, and a Go workspace.",
+    description: "Official guidance for packages, modules, tests, and a normal Go workspace.",
   },
   {
-    label: "Go FAQ",
-    url: "https://go.dev/doc/faq",
+    label: "Official: Effective Go — use after the fundamentals",
+    url: "https://go.dev/doc/effective_go",
     kind: "doc",
-    description: "Answers to the design and 'why does Go do X' questions every learner hits.",
+    description:
+      "Useful idiom and style guidance, but better as a later reference than a first tutorial.",
   },
   {
-    label: "Editor plugins & gopls",
-    url: "https://go.dev/gopls",
-    kind: "tool",
-    description: "Set up a first-class Go editing experience with the official language server.",
+    label: "Official: The Go Blog",
+    url: "https://go.dev/blog/",
+    kind: "article",
+    description:
+      "Authoritative focused explanations from the Go team; follow links from a lesson, not cover to cover.",
   },
   {
-    label: "Managing dependencies",
-    url: "https://go.dev/doc/modules/managing-dependencies",
+    label: "Official: Go language specification — lookup only",
+    url: "https://go.dev/ref/spec",
     kind: "doc",
-    description: "Day-to-day workflow for adding, upgrading, and pruning module dependencies.",
+    description: "The exact language rules. Use it to verify a detail, not as a beginner course.",
   },
   {
-    label: "Learn Go Programming — freeCodeCamp (7h)",
-    url: "https://www.youtube.com/watch?v=YS4e4q9oBaU",
-    kind: "video",
-    description: "A thorough, beginner-friendly full-length Go video course.",
+    label: "Official: Go diagnostics — advanced",
+    url: "https://go.dev/doc/diagnostics",
+    kind: "doc",
+    description:
+      "Official guide to profiling, tracing, and runtime diagnostics after the core course.",
   },
   {
-    label: "Rob Pike — Go Concurrency Patterns",
+    label: "Official talk: Go Concurrency Patterns",
     url: "https://www.youtube.com/watch?v=f6kdp27TYZs",
     kind: "video",
-    description: "The classic talk on goroutines, channels, and composition from a Go creator.",
+    description: "A classic talk from the Go team; save it for the optional concurrency module.",
   },
   {
-    label: "Rob Pike — Concurrency is not Parallelism",
-    url: "https://www.youtube.com/watch?v=oV9rvDllKEg",
-    kind: "video",
-    description: "The mental model that clears up the most common concurrency confusion.",
+    label: "Official: Editor setup with gopls",
+    url: "https://go.dev/gopls/",
+    kind: "tool",
+    description:
+      "Set up the official language server for completion, navigation, formatting, and diagnostics.",
   },
   {
-    label: "justforfunc — Programming in Go",
-    url: "https://www.youtube.com/c/justforfunc",
-    kind: "video",
-    description: "Francesc Campoy's hands-on Go series covering many practical topics.",
+    label: "Official: Go documentation index",
+    url: "https://go.dev/doc/",
+    kind: "doc",
+    description:
+      "The complete official index for tutorials, module guidance, diagnostics, security, and reference material not expanded into a core lesson.",
   },
 ];
