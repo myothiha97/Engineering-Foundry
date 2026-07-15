@@ -26,25 +26,22 @@ export const goConcurrencyPatterns: Lesson = {
     "Decide when sequential code is the correct, clearer choice instead of reaching for concurrency by default",
   ],
   concepts: ["pipelines", "fan-in", "fan-out", "worker-pool", "structured-concurrency"],
-  ledgerFlowApplications: [
-    "Build a bounded transaction-processing pipeline: read transactions off a channel, process them across a worker pool sized to the DB connection count, and fan the results back",
-    "Cancel the whole pipeline through a single context so an aborted import tears every stage down cleanly with no leaked goroutines",
-    "Use errgroup so the first failing transaction batch cancels the rest and surfaces one error to the handler",
-  ],
   references: [
     {
       title: "Go Concurrency Patterns: Pipelines and cancellation",
       url: "https://go.dev/blog/pipelines",
       teaches:
         "How to build pipeline stages connected by channels, fan out and fan in, and cancel every stage cleanly with a shared done/context signal.",
-      relevance: "The canonical source for every pattern in this lesson; the structure here follows it directly.",
-      required: true,
+      relevance:
+        "The canonical source for every pattern in this lesson; the structure here follows it directly.",
+      required: false,
       section: "Pipelines; Fan-out, fan-in; Explicit cancellation",
     },
     {
       title: "Advanced Go Concurrency Patterns",
       url: "https://go.dev/blog/advanced-go-concurrency-patterns",
-      teaches: "Richer select-driven coordination — combining timeouts, cancellation, and state into concurrent components.",
+      teaches:
+        "Richer select-driven coordination — combining timeouts, cancellation, and state into concurrent components.",
       relevance: "Deepens the select-plus-cancellation reasoning the pipeline stages rely on.",
       required: false,
       section: "Cancellation; Coordinating with select",
@@ -55,14 +52,16 @@ export const goConcurrencyPatterns: Lesson = {
       teaches:
         "How errgroup.WithContext runs a group of goroutines, cancels the context on the first error, and returns that error from Wait; SetLimit bounds concurrency.",
       relevance: "Backs the structured-concurrency section and the errgroup-based worker pool.",
-      required: true,
+      required: false,
       section: "Group; WithContext; SetLimit",
     },
     {
       title: "Rob Pike — Go Concurrency Patterns (talk)",
       url: "https://go.dev/talks/2012/concurrency.slide",
-      teaches: "The foundational vocabulary — generators, fan-in, fan-out, and select as coordination — from the language's designer.",
-      relevance: "The original framing these patterns come from; useful intuition for why they compose.",
+      teaches:
+        "The foundational vocabulary — generators, fan-in, fan-out, and select as coordination — from the language's designer.",
+      relevance:
+        "The original framing these patterns come from; useful intuition for why they compose.",
       required: false,
       section: "Generator; Fan-in; Select",
     },
@@ -200,67 +199,6 @@ export const goConcurrencyPatterns: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The natural first move, once you know `go f()`, is to spray goroutines at the problem: one goroutine per item, no coordination, and a shared channel or slice to collect results. \"Goroutines are cheap,\" you remember, \"so more is better.\" For ten items on your laptop it works and feels fast.\n\nThat instinct breaks in two directions. First, *cheap to create* is not *free to run*: 50,000 goroutines each opening a database connection or a socket will exhaust the real, scarce resource behind them. Second, fire-and-forget goroutines have no defined lifetime — nobody closes the channel, nobody waits, and nobody can cancel them — so when the consumer stops early they block forever on a send. The naive version doesn't just underperform; it leaks.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "One goroutine per job — unbounded and leaky",
-            language: "go",
-            code:
-              'func fetchAll(urls []string) []Result {\n    results := make(chan Result)\n    for _, u := range urls {\n        go fetch(u, results) // 50,000 goroutines, 50,000 sockets at once\n    }\n    var out []Result\n    for range urls { // if fetch errors and never sends, this blocks forever\n        out = append(out, <-results)\n    }\n    return out\n}',
-            takeaway:
-              "Unbounded fan-out oversubscribes the real resource (sockets, DB connections), and there is no cancellation path — if any `fetch` never sends, the collector deadlocks and every stuck goroutine leaks.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "\"More goroutines\" is not a strategy — it ignores the scarce resource each one consumes.",
-            "Fire-and-forget goroutines with no owner, no close, and no cancel are the classic leak.",
-            "A missing result (an error path that never sends) turns a naive collector into a deadlock.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "Here is the failure in its most concrete form. A goroutine sends on a channel; the receiver, for whatever reason — an error, an early return, a satisfied `break` — stops receiving. On an unbuffered channel that next send blocks. There is no receiver coming. There is no cancellation to unblock it. So the goroutine sits, parked forever, holding whatever memory and resources it captured. Multiply that by a busy endpoint and you have a slow memory leak that no test reproduces, because tests consume every value.\n\nThe root cause is always the same: **a goroutine was started without a guaranteed way for it to finish.** Either it will run out of work (its input channel gets closed) or it can be told to stop (its context is cancelled). If neither is true on every code path, it can leak. Patterns exist precisely to make \"it always finishes\" structural rather than something you hope you remembered.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The producer that outlives its consumer",
-            context:
-              "A search endpoint starts a producer goroutine streaming results on an unbuffered channel and reads them in a loop. When the user's query matches, the handler finds its answer and returns after the first few results — it stops receiving. Under load, the service's goroutine count climbs and never comes back down until it's restarted.",
-            insight:
-              "Each early return leaves the producer blocked on its next send, with no receiver and no cancellation — a permanent leak. The fix is structural: give the producer a `ctx` (or `done` channel) to select on alongside its send, and cancel it (a deferred `cancel()`) the instant the consumer is done. Then an early return drains the producer instead of orphaning it.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "The mental image that ties every pattern together is **water flowing through connected pipes**. A **pipeline** is a straight run of pipes: water (values) enters the first pipe, each stage transforms it, and it flows out the end. Each stage is a goroutine that *ranges over its input pipe and closes its output pipe when the input runs dry* — that closing is what tells the next stage \"no more water is coming,\" so its range ends too. Closure propagates down the line and the whole pipeline shuts itself down in order.\n\n**Fan-out** is splitting one pipe into several so a slow stage gets more hands: multiple goroutines all draining the *same* input channel. **Fan-in** is the reverse — merging several pipes back into one — and it has a subtlety: the merged pipe must be closed exactly *once*, only after *all* the incoming pipes have run dry, which is what a `sync.WaitGroup` is for. A **worker pool** is just fan-out with a fixed number of hands, chosen to match a scarce resource. And over all of it sits **cancellation**: a shut-off valve (`context`) that every stage watches, so closing it drains the whole system instead of leaving water trapped in a pipe.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "The unifying rule",
-            text: "In every pattern, closure flows downstream: a stage closes its OUTPUT when its INPUT is exhausted (range ends) or when it's cancelled. The sender always owns the close, never the receiver. Get that one rule right and pipelines terminate cleanly; get it wrong and you leak or panic.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Pipeline = stages in a line; each ranges its input and closes its output when done.",
-            "Fan-out = several goroutines draining one channel (parallelise a slow stage).",
-            "Fan-in = merge several channels into one; close the merged channel once, after a WaitGroup says all sources finished.",
-            "Worker pool = fan-out with a fixed count matched to a scarce resource; cancellation is a valve every stage watches.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
       body: "Reduce the patterns to their invariants and they stop surprising you. A pipeline stage is a function that takes a receive-only input channel and returns a receive-only output channel; internally it starts one goroutine that `for v := range in` does its work, sends downstream, and `defer close(out)` so the output closes exactly when the input is drained. Because the *sender* of `out` is this stage, this stage owns closing `out` — always.\n\nFan-in needs one extra idea. When N goroutines all send on one merged channel, none of them may close it (closing while another still sends panics, and closing twice panics). So you count them with a `sync.WaitGroup`: each forwarding goroutine calls `wg.Done()` when its source is drained, and a separate goroutine does `wg.Wait(); close(merged)` — closing once, after the last source finishes. Cancellation threads through all of it: every send is wrapped in a `select` that also watches `ctx.Done()`, so a cancelled stage can return instead of blocking on a send nobody will receive.",
       blocks: [
@@ -269,8 +207,7 @@ export const goConcurrencyPatterns: Lesson = {
           example: {
             title: "The shape of a pipeline stage",
             language: "go",
-            code:
-              'import "context"\n\n// A stage: receive-only in, returns a receive-only out.\nfunc square(ctx context.Context, in <-chan int) <-chan int {\n    out := make(chan int)\n    go func() {\n        defer close(out) // this stage owns out, so it closes out — once\n        for n := range in { // ends when the previous stage closes its output\n            select {\n            case out <- n * n:\n            case <-ctx.Done(): // cancelled: stop instead of blocking on send\n                return\n            }\n        }\n    }()\n    return out\n}',
+            code: 'import "context"\n\n// A stage: receive-only in, returns a receive-only out.\nfunc square(ctx context.Context, in <-chan int) <-chan int {\n    out := make(chan int)\n    go func() {\n        defer close(out) // this stage owns out, so it closes out — once\n        for n := range in { // ends when the previous stage closes its output\n            select {\n            case out <- n * n:\n            case <-ctx.Done(): // cancelled: stop instead of blocking on send\n                return\n            }\n        }\n    }()\n    return out\n}',
             takeaway:
               "Every stage follows the same template: make out, start one goroutine, `defer close(out)`, range the input, and guard the send with `select` on `ctx.Done()`. The sender owns the close; cancellation gives a non-blocking exit.",
           },
@@ -286,15 +223,14 @@ export const goConcurrencyPatterns: Lesson = {
       ],
     },
     mechanics: {
-      body: "Now the precise moving parts. A **pipeline** connects stages by channel: `nums := gen(ctx, 2, 3, 4); out := square(ctx, nums)`; each stage returns the channel the next one reads. The first stage (a *generator*) turns a slice or loop into a channel; the last is consumed with `for v := range out`.\n\n**Fan-out**: start k goroutines that all `for v := range in` on the *same* input channel — Go delivers each value to exactly one of them, so they naturally share the load. **Fan-in / merge**: take several `<-chan T`, start one goroutine per input forwarding into a shared `out`, track them with a `WaitGroup`, and close `out` once in a `wg.Wait(); close(out)` goroutine. A **worker pool** is fan-out with a fixed k chosen to bound concurrency — k workers draining a `jobs` channel, so at most k jobs are in flight regardless of how many jobs exist. **errgroup** (`golang.org/x/sync/errgroup`) packages the common case: `g, ctx := errgroup.WithContext(ctx)`, `g.Go(func() error {...})` per task, optional `g.SetLimit(k)` to bound concurrency, and `g.Wait()` returns the first non-nil error while cancelling `ctx` so siblings stop.",
+      body: "Now the precise moving parts. A **pipeline** connects stages by channel: `nums := gen(ctx, 2, 3, 4); out := square(ctx, nums)`; each stage returns the channel the next one reads. The first stage (a *generator*) turns a slice or loop into a channel; the last is consumed with `for v := range out`.\n\n**Fan-out**: start k goroutines that all `for v := range in` on the *same* input channel — Go delivers each value to exactly one of them, so they naturally share the load. **Fan-in / merge**: take several `<-chan T`, start one goroutine per input forwarding into a shared `out`, track them with a `WaitGroup`, and close `out` once in a `wg.Wait(); close(out)` goroutine.\n\nA **worker pool** is fan-out with a fixed k chosen to bound concurrency — k workers draining a `jobs` channel, so at most k jobs are in flight regardless of how many jobs exist. **errgroup** (`golang.org/x/sync/errgroup`) packages the common case: `g, ctx := errgroup.WithContext(ctx)`, `g.Go(func() error {...})` per task, optional `g.SetLimit(k)` to bound concurrency, and `g.Wait()` returns the first non-nil error while cancelling `ctx` so siblings stop.",
       blocks: [
         {
           type: "example",
           example: {
             title: "Fan-in: merge many channels, close once with a WaitGroup",
             language: "go",
-            code:
-              'import "sync"\n\nfunc merge(ctx context.Context, ins ...<-chan int) <-chan int {\n    out := make(chan int)\n    var wg sync.WaitGroup\n    wg.Add(len(ins))\n    for _, in := range ins {\n        go func(c <-chan int) {\n            defer wg.Done() // this source is drained\n            for v := range c {\n                select {\n                case out <- v:\n                case <-ctx.Done():\n                    return\n                }\n            }\n        }(in)\n    }\n    go func() { wg.Wait(); close(out) }() // close out exactly once, after all sources\n    return out\n}',
+            code: 'import "sync"\n\nfunc merge(ctx context.Context, ins ...<-chan int) <-chan int {\n    out := make(chan int)\n    var wg sync.WaitGroup\n    wg.Add(len(ins))\n    for _, in := range ins {\n        go func(c <-chan int) {\n            defer wg.Done() // this source is drained\n            for v := range c {\n                select {\n                case out <- v:\n                case <-ctx.Done():\n                    return\n                }\n            }\n        }(in)\n    }\n    go func() { wg.Wait(); close(out) }() // close out exactly once, after all sources\n    return out\n}',
             takeaway:
               "N forwarding goroutines share one `out`; none of them closes it. A single `wg.Wait(); close(out)` goroutine closes it exactly once, after the last source is drained — the only safe way to close a multi-sender channel.",
           },
@@ -319,12 +255,31 @@ export const goConcurrencyPatterns: Lesson = {
             title: "A pipeline: stages connected by channels",
             kind: "flow",
             nodes: [
-              { id: "gen", label: "generate", detail: "turns input into a channel; closes it when the source is exhausted" },
-              { id: "s1", label: "stage: filter", detail: "ranges its input, sends kept values, closes its output when input drains", tone: "accent" },
-              { id: "s2", label: "stage: transform", detail: "ranges its input, sends results, closes its output" },
-              { id: "sink", label: "consume", detail: "for v := range final — ends when the last stage closes", tone: "success" },
+              {
+                id: "gen",
+                label: "generate",
+                detail: "turns input into a channel; closes it when the source is exhausted",
+              },
+              {
+                id: "s1",
+                label: "stage: filter",
+                detail: "ranges its input, sends kept values, closes its output when input drains",
+                tone: "accent",
+              },
+              {
+                id: "s2",
+                label: "stage: transform",
+                detail: "ranges its input, sends results, closes its output",
+              },
+              {
+                id: "sink",
+                label: "consume",
+                detail: "for v := range final — ends when the last stage closes",
+                tone: "success",
+              },
             ],
-            caption: "Closure flows downstream: each stage closes its own output when its input runs dry, so the whole line shuts down in order.",
+            caption:
+              "Closure flows downstream: each stage closes its own output when its input runs dry, so the whole line shuts down in order.",
           },
         },
         {
@@ -335,11 +290,22 @@ export const goConcurrencyPatterns: Lesson = {
             nodes: [
               { id: "src", label: "one input channel", detail: "the stream of values to process" },
               { id: "w1", label: "worker 1", detail: "ranges the shared input", tone: "accent" },
-              { id: "w2", label: "worker 2", detail: "ranges the same input — each value goes to one worker", tone: "accent" },
+              {
+                id: "w2",
+                label: "worker 2",
+                detail: "ranges the same input — each value goes to one worker",
+                tone: "accent",
+              },
               { id: "w3", label: "worker 3", detail: "parallelises the slow step" },
-              { id: "merge", label: "merge (fan-in)", detail: "WaitGroup counts workers; close output once all done", tone: "success" },
+              {
+                id: "merge",
+                label: "merge (fan-in)",
+                detail: "WaitGroup counts workers; close output once all done",
+                tone: "success",
+              },
             ],
-            caption: "Fan-out shares one input across k workers; fan-in merges their outputs and closes the merged channel exactly once.",
+            caption:
+              "Fan-out shares one input across k workers; fan-in merges their outputs and closes the merged channel exactly once.",
           },
         },
         {
@@ -348,13 +314,36 @@ export const goConcurrencyPatterns: Lesson = {
             title: "Worker pool: bounded concurrency on a jobs channel",
             kind: "sequence",
             nodes: [
-              { id: "jobs", label: "jobs channel gets N jobs", detail: "producer sends all jobs, then closes the channel" },
-              { id: "pool", label: "start k workers (k << N)", detail: "k is chosen to match a scarce resource", tone: "accent" },
-              { id: "drain", label: "each worker: for j := range jobs", detail: "at most k jobs in flight at once — that is the bound" },
-              { id: "results", label: "workers send on results", detail: "many senders — nobody closes results yet" },
-              { id: "close", label: "wg.Wait(); close(results)", detail: "one owner closes results after all workers finish", tone: "success" },
+              {
+                id: "jobs",
+                label: "jobs channel gets N jobs",
+                detail: "producer sends all jobs, then closes the channel",
+              },
+              {
+                id: "pool",
+                label: "start k workers (k << N)",
+                detail: "k is chosen to match a scarce resource",
+                tone: "accent",
+              },
+              {
+                id: "drain",
+                label: "each worker: for j := range jobs",
+                detail: "at most k jobs in flight at once — that is the bound",
+              },
+              {
+                id: "results",
+                label: "workers send on results",
+                detail: "many senders — nobody closes results yet",
+              },
+              {
+                id: "close",
+                label: "wg.Wait(); close(results)",
+                detail: "one owner closes results after all workers finish",
+                tone: "success",
+              },
             ],
-            caption: "N jobs, only k running at any instant. The pool caps concurrency; a WaitGroup-gated close ends the results stream cleanly.",
+            caption:
+              "N jobs, only k running at any instant. The pool caps concurrency; a WaitGroup-gated close ends the results stream cleanly.",
           },
         },
       ],
@@ -367,8 +356,7 @@ export const goConcurrencyPatterns: Lesson = {
           example: {
             title: "A bounded, cancellable worker pool",
             language: "go",
-            code:
-              'import (\n    "context"\n    "sync"\n)\n\nfunc runPool(ctx context.Context, jobs <-chan int, workers int) <-chan int {\n    results := make(chan int)\n    var wg sync.WaitGroup\n    wg.Add(workers)\n    for i := 0; i < workers; i++ {\n        go func() {\n            defer wg.Done()\n            for j := range jobs { // shared input: caps in-flight work at `workers`\n                select {\n                case results <- process(j):\n                case <-ctx.Done(): // cancelled mid-send: exit, do not block\n                    return\n                }\n            }\n        }()\n    }\n    go func() { wg.Wait(); close(results) }() // one owner, one close\n    return results\n}',
+            code: 'import (\n    "context"\n    "sync"\n)\n\nfunc runPool(ctx context.Context, jobs <-chan int, workers int) <-chan int {\n    results := make(chan int)\n    var wg sync.WaitGroup\n    wg.Add(workers)\n    for i := 0; i < workers; i++ {\n        go func() {\n            defer wg.Done()\n            for j := range jobs { // shared input: caps in-flight work at `workers`\n                select {\n                case results <- process(j):\n                case <-ctx.Done(): // cancelled mid-send: exit, do not block\n                    return\n                }\n            }\n        }()\n    }\n    go func() { wg.Wait(); close(results) }() // one owner, one close\n    return results\n}',
             takeaway:
               "Exactly `workers` goroutines exist, so concurrency is bounded regardless of job count. The results channel has many senders, so a single `wg.Wait(); close(results)` goroutine owns the close. Every send is guarded by `ctx.Done()` so cancellation can't leak a worker.",
           },
@@ -378,8 +366,7 @@ export const goConcurrencyPatterns: Lesson = {
           example: {
             title: "The same job, structured with errgroup",
             language: "go",
-            code:
-              'import "golang.org/x/sync/errgroup"\n\nfunc validateAll(ctx context.Context, batches []Batch) error {\n    g, ctx := errgroup.WithContext(ctx) // ctx is cancelled on first error\n    g.SetLimit(8)                       // bound concurrency to 8 at a time\n    for _, b := range batches {\n        g.Go(func() error {\n            return validate(ctx, b) // ctx lets it stop early if a sibling failed\n        })\n    }\n    return g.Wait() // returns the FIRST non-nil error (or nil)\n}',
+            code: 'import "golang.org/x/sync/errgroup"\n\nfunc validateAll(ctx context.Context, batches []Batch) error {\n    g, ctx := errgroup.WithContext(ctx) // ctx is cancelled on first error\n    g.SetLimit(8)                       // bound concurrency to 8 at a time\n    for _, b := range batches {\n        g.Go(func() error {\n            return validate(ctx, b) // ctx lets it stop early if a sibling failed\n        })\n    }\n    return g.Wait() // returns the FIRST non-nil error (or nil)\n}',
             takeaway:
               "errgroup packages run-bound-cancel-collect: `SetLimit` bounds concurrency, `WithContext` cancels every sibling on the first error, and `Wait` returns that error. Reach for it whenever tasks can fail.",
           },
@@ -395,7 +382,7 @@ export const goConcurrencyPatterns: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before you read on — a wrong guess you correct sticks better than an answer you skimmed. Here is a producer and a consumer that stops early, on an unbuffered channel, with no cancellation:\n\n```\nfunc main() {\n    ch := make(chan int)\n    go func() {\n        for i := 0; ; i++ {\n            ch <- i        // send forever\n        }\n    }()\n    for i := 0; i < 3; i++ {\n        fmt.Println(<-ch)  // consume only 3\n    }\n    // main returns here\n}\n```\n\nDoes this print 0,1,2 and exit cleanly? Is there a leak? Commit to an answer.\n\nHere's what actually happens: it **prints 0, 1, 2 and the program exits** — because when `main` returns, the whole process exits and the blocked producer goroutine is killed along with it. So *this* program doesn't visibly leak. But change one thing — make this a request handler inside a long-running server instead of `main` — and it leaks badly: after the consumer reads 3 values and returns, the producer blocks on its 4th `ch <- i` with no receiver and no way to be told to stop. That goroutine lives until the process restarts. The lesson: a blocked send with no receiver and no cancellation path is a leak; it only *looks* harmless when the process happens to exit right after. The fix is to give the producer a `ctx` to select on and cancel it when the consumer is done (`defer cancel()`).",
+      body: "Predict before you read on — a wrong guess you correct sticks better than an answer you skimmed. Here is a producer and a consumer that stops early, on an unbuffered channel, with no cancellation:\n\n```\nfunc main() {\n    ch := make(chan int)\n    go func() {\n        for i := 0; ; i++ {\n            ch <- i        // send forever\n        }\n    }()\n    for i := 0; i < 3; i++ {\n        fmt.Println(<-ch)  // consume only 3\n    }\n    // main returns here\n}\n```\n\nDoes this print 0,1,2 and exit cleanly? Is there a leak? Commit to an answer.\n\nHere's what actually happens: it **prints 0, 1, 2 and the program exits** — because when `main` returns, the whole process exits and the blocked producer goroutine is killed along with it. So *this* program doesn't visibly leak.\n\nBut change one thing — make this a request handler inside a long-running server instead of `main` — and it leaks badly: after the consumer reads 3 values and returns, the producer blocks on its 4th `ch <- i` with no receiver and no way to be told to stop. That goroutine lives until the process restarts.\n\nThe lesson: a blocked send with no receiver and no cancellation path is a leak; it only *looks* harmless when the process happens to exit right after. The fix is to give the producer a `ctx` to select on and cancel it when the consumer is done (`defer cancel()`).",
     },
     "failure-cases": {
       body: "Almost every pattern bug is a close-ownership mistake, an unbounded fan-out, or a missing cancellation path. Here are the ones you'll actually hit.",
@@ -416,8 +403,7 @@ export const goConcurrencyPatterns: Lesson = {
           example: {
             title: "Cancel without a select still leaks",
             language: "go",
-            code:
-              'ctx, cancel := context.WithCancel(context.Background())\nout := make(chan int)\ngo func() {\n    out <- expensive() // BUG: bare send; cancel() cannot unblock this\n}()\ncancel()               // consumer gives up...\n// ...but the goroutine is stuck on `out <- ...` forever — a leak.\n\n// Fix: make the send cancellable.\ngo func() {\n    select {\n    case out <- expensive():\n    case <-ctx.Done(): // now cancel() lets the goroutine return\n        return\n    }\n}()',
+            code: "ctx, cancel := context.WithCancel(context.Background())\nout := make(chan int)\ngo func() {\n    out <- expensive() // BUG: bare send; cancel() cannot unblock this\n}()\ncancel()               // consumer gives up...\n// ...but the goroutine is stuck on `out <- ...` forever — a leak.\n\n// Fix: make the send cancellable.\ngo func() {\n    select {\n    case out <- expensive():\n    case <-ctx.Done(): // now cancel() lets the goroutine return\n        return\n    }\n}()",
             takeaway:
               "A context cancel is only a signal — it does nothing to a goroutine blocked on a bare send. Every blocking send in a cancellable system must be inside a `select` that also watches `ctx.Done()`.",
           },
@@ -470,42 +456,11 @@ export const goConcurrencyPatterns: Lesson = {
         },
       ],
     },
-    ledgerflow: {
-      body: "This is exactly how LedgerFlow processes a large transaction import without drowning the database. Incoming transactions are read off an input channel and fed into a **bounded worker pool** whose size matches the database connection pool — say 20 workers — so no matter how many thousands of transactions arrive, at most 20 are being written at once. Each worker processes a transaction and sends its result on a results channel; a single `wg.Wait(); close(results)` goroutine ends that stream cleanly, and the coordinator fans the results back into the response.\n\nThe whole pipeline hangs off one `context`. If the request is cancelled, the client disconnects, or one batch fails hard, cancelling that context drains every stage: workers stop mid-send via their `ctx.Done()` case, the feeder stops queueing jobs, and no goroutine is left blocked on a send nobody will receive. Where transactions can fail and the first failure should abort the import, LedgerFlow uses `errgroup` — `SetLimit` supplies the same bound, and `Wait` surfaces the one error to the handler while cancelling the rest.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: a bounded, cancellable transaction pipeline",
-            kind: "sequence",
-            nodes: [
-              { id: "in", label: "transactions arrive on a channel", detail: "e.g. a 50,000-row import stream" },
-              { id: "pool", label: "worker pool, size = DB pool", detail: "~20 workers, so ≤20 writes in flight", tone: "accent" },
-              { id: "process", label: "each worker writes one transaction", detail: "one blocked on the DB lets others proceed" },
-              { id: "merge", label: "results fanned back", detail: "wg.Wait(); close(results) ends the stream once", tone: "success" },
-              { id: "cancel", label: "ctx cancel drains everything", detail: "disconnect or failure tears every stage down — no leaks", tone: "danger" },
-            ],
-            caption: "Concurrency for throughput, a bound matched to the DB for safety, and one context so cancellation drains the whole pipeline cleanly.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Bound the pool to the DB connection count, not to the number of transactions.",
-            "Fan results back with a single WaitGroup-gated close so the stream ends exactly once.",
-            "Thread one context through every stage so cancellation drains the pipeline with no leaked goroutines; use errgroup when a batch failure should abort the import.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about worker pools\" into \"I reach for a bounded, cancellable pool without thinking.\" Work across predicting pipeline closure, reading the WaitGroup-gated fan-in close, implementing a cancellable worker pool, debugging a blocked-send leak, refactoring unbounded goroutines into a bounded pool, deciding sequential vs concurrent for a real workload, and structuring a group with errgroup. Each produces a different kind of evidence — do them, don't just read them.",
-    },
     mastery: {
       body: "You've mastered this when you can explain how pipeline, fan-out, fan-in, and worker pool differ and compose (and the close/ownership rule each needs), predict whether a given structure leaks a goroutine when its consumer stops early or its context is cancelled, implement a worker pool that bounds concurrency and shuts down cleanly on cancellation, and defend a sequential-vs-concurrent choice from where the time actually goes. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
     },
     summary: {
-      body: "Two ideas carry this capstone. **Patterns compose the primitives into reliable systems** — a pipeline chains channel-connected stages, fan-out parallelises a slow one, fan-in merges results (closing the merged channel once via a WaitGroup), and a worker pool bounds concurrency to a scarce resource; errgroup packages the run-bound-cancel-collect case. **Every one of them must be cancellable and leak-free** — the sender owns the close, each stage watches `ctx.Done()` on its sends, and every goroutine has a guaranteed end. And the meta-lesson: concurrency is for overlapping *waiting*, so when work is CPU-cheap, short, or order-sensitive, a plain sequential loop is the correct, clearer choice.",
+      body: "Two ideas carry this capstone. **Patterns compose the primitives into reliable systems** — a pipeline chains channel-connected stages, fan-out parallelises a slow one, fan-in merges results (closing the merged channel once via a WaitGroup), and a worker pool bounds concurrency to a scarce resource; errgroup packages the run-bound-cancel-collect case.\n\n**Every one of them must be cancellable and leak-free** — the sender owns the close, each stage watches `ctx.Done()` on its sends, and every goroutine has a guaranteed end. And the meta-lesson: concurrency is for overlapping *waiting*, so when work is CPU-cheap, short, or order-sensitive, a plain sequential loop is the correct, clearer choice.",
       blocks: [
         {
           type: "points",

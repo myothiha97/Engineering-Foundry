@@ -23,33 +23,34 @@ export const goGoroutinesScheduler: Lesson = {
     "Recognize that a program exits when main returns, and wait for outstanding goroutines instead of leaking them",
   ],
   concepts: ["goroutines", "scheduler", "GMP", "blocking"],
-  ledgerFlowApplications: [
-    "Process a batch of transactions concurrently instead of one strictly after another",
-    "Cap parallelism to the number of CPUs so the database and CPU are not oversubscribed",
-    "Wait for every in-flight transaction to finish before the request handler returns its response",
-  ],
   references: [
     {
       title: "A Tour of Go — Goroutines",
       url: "https://go.dev/tour/concurrency/1",
-      teaches: "The basic syntax and meaning of `go f()` and that goroutines run in the same address space.",
-      relevance: "The canonical first introduction to starting a goroutine, which this lesson builds on.",
-      required: true,
+      teaches:
+        "The basic syntax and meaning of `go f()` and that goroutines run in the same address space.",
+      relevance:
+        "The canonical first introduction to starting a goroutine, which this lesson builds on.",
+      required: false,
       section: "Goroutines",
     },
     {
       title: "Effective Go — Goroutines",
       url: "https://go.dev/doc/effective_go#goroutines",
-      teaches: "Why goroutines are cheap, how they are multiplexed onto OS threads, and how blocking is handled.",
-      relevance: "Grounds the mental model of many goroutines over a few threads with the official explanation.",
-      required: true,
+      teaches:
+        "Why goroutines are cheap, how they are multiplexed onto OS threads, and how blocking is handled.",
+      relevance:
+        "Grounds the mental model of many goroutines over a few threads with the official explanation.",
+      required: false,
       section: "Goroutines",
     },
     {
       title: "The Go Programming Language Specification — Go statements",
       url: "https://go.dev/ref/spec#Go_statements",
-      teaches: "The normative rules for the `go` statement, including when its function and arguments are evaluated.",
-      relevance: "Settles exactly what `go f(x)` evaluates immediately versus what runs concurrently.",
+      teaches:
+        "The normative rules for the `go` statement, including when its function and arguments are evaluated.",
+      relevance:
+        "Settles exactly what `go f(x)` evaluates immediately versus what runs concurrently.",
       required: false,
       section: "Go statements",
     },
@@ -59,7 +60,7 @@ export const goGoroutinesScheduler: Lesson = {
       id: "go6gs-predict-exit",
       type: "prediction",
       prompt:
-        "A program's main function runs `go fmt.Println(\"hello from goroutine\")` and then immediately returns, with nothing after it. Predict whether the line reliably prints, and explain why.",
+        'A program\'s main function runs `go fmt.Println("hello from goroutine")` and then immediately returns, with nothing after it. Predict whether the line reliably prints, and explain why.',
       expectedAnswer:
         "It usually prints nothing. `go` starts the goroutine but does not wait; main returns almost immediately, the program exits, and the runtime kills the not-yet-scheduled goroutine before it runs.",
       hints: [
@@ -174,65 +175,6 @@ export const goGoroutinesScheduler: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "If you've met threads in other languages, the natural assumption is: \"a goroutine is just Go's word for an OS thread.\" So you reason about them the way you would about threads — expensive, heavyweight, a few dozen at most before the machine struggles.\n\nThat assumption leads you to under-use them (afraid to start many) and to misunderstand what `go f()` costs. The other naive move is to write `go f()` and assume the line waits for `f` to finish, the way an ordinary call does. It doesn't — and that gap is the source of the classic beginner bug.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "`go f()` does NOT wait",
-            language: "go",
-            code:
-              'func main() {\n    go fmt.Println("from the goroutine")\n    fmt.Println("from main")\n}\n// Often prints only:\n// from main\n// (main returns before the goroutine gets a chance to run)',
-            takeaway:
-              "The `go` line starts the goroutine and moves on immediately. main reaches its end and the program exits — usually before the goroutine ever prints.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "A goroutine is **not** an OS thread — treating it as one makes you afraid to start many.",
-            "`go f()` starts `f` and returns at once; it does not pause to wait for `f`.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The wait-for-nothing assumption fails in the most misleading way possible: it often *looks* like it works. On a fast, idle laptop the goroutine sometimes squeezes in before main returns, so your test passes. On a busy production machine, or with slightly different timing, it doesn't — and the work silently never happens.\n\nThe root cause is a rule you must burn into memory: **when `main` returns, the whole program exits immediately, and every still-running goroutine is killed abruptly** — no cleanup, no defer, no warning. A goroutine whose result you never wait for is usually a bug, because you've given it no chance to finish.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The transactions that vanish under load",
-            context:
-              "A request handler loops over incoming transactions and does `go save(tx)` for each, then returns \"200 OK\" right away. Every test passes. In production, under real traffic, a fraction of transactions are never written to the database and the totals don't add up.",
-            insight:
-              "The handler never waited for the save goroutines. When timing is tight — or the process shuts down — it returns (or exits) before some saves run, and those goroutines are killed mid-flight. The fix is to *wait* for the work, not to fire and forget it.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental image that fixes everything. Picture a small number of workers (real OS threads) and a big pile of index cards (goroutines), each card describing a task. A worker picks up a card and works on it. The instant that task has to *wait* for something — the database to reply, a lock to free up — the worker doesn't sit idle: it puts the card down and grabs another one. When the waited-for thing is ready, the parked card goes back in the pile to be picked up again later.\n\nThat's the Go **scheduler**: a piece of the runtime that hands goroutines to threads and, crucially, swaps a *blocked* goroutine off a thread so a *runnable* one can use it. Because the cards are cheap and the swap happens inside Go (not by asking the operating system), you can have hundreds of thousands of goroutines running on just a handful of threads.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "Concurrency is not parallelism",
-            text: "Concurrency is having many tasks *in progress* and interleaving them (one worker juggling many cards). Parallelism is many tasks running at the *exact same instant* (many workers). Goroutines give you concurrency always; how much runs truly in parallel depends on how many workers the runtime uses.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Many cheap goroutines are multiplexed onto a few OS threads by the runtime **scheduler**.",
-            "When a goroutine **blocks** (waiting on I/O, a channel, or a lock), the scheduler parks it and runs another on that thread.",
-            "The swap happens in user space, inside Go — so it's far cheaper than an OS thread switch.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
       body: "Why are goroutines so cheap? Because a goroutine starts with a tiny **stack** — the scratch memory a function uses for its local variables — of just a few kilobytes, and that stack *grows on demand* if the goroutine needs more. An OS thread, by contrast, reserves a large fixed stack (often megabytes) and is managed by the operating system, which makes creating and switching them comparatively expensive.\n\nSo the model is: **goroutines are a Go-runtime concept, threads are an operating-system concept, and the runtime maps the many onto the few.** You reason in goroutines; the runtime worries about threads. This is why starting 100,000 goroutines is reasonable, while starting 100,000 OS threads would melt the machine.",
       blocks: [
@@ -245,17 +187,20 @@ export const goGoroutinesScheduler: Lesson = {
               {
                 id: "goroutine",
                 label: "Goroutine (G)",
-                detail: "Runtime concept. Starts at a few KB of stack that grows on demand. Cheap to create; you can have hundreds of thousands.",
+                detail:
+                  "Runtime concept. Starts at a few KB of stack that grows on demand. Cheap to create; you can have hundreds of thousands.",
                 tone: "success",
               },
               {
                 id: "thread",
                 label: "OS thread (M)",
-                detail: "Operating-system concept. Large fixed stack, OS-managed. Expensive; you keep only a handful.",
+                detail:
+                  "Operating-system concept. Large fixed stack, OS-managed. Expensive; you keep only a handful.",
                 tone: "muted",
               },
             ],
-            caption: "The runtime multiplexes many goroutines onto a few threads — that mismatch in cost is the whole point.",
+            caption:
+              "The runtime multiplexes many goroutines onto a few threads — that mismatch in cost is the whole point.",
           },
         },
         {
@@ -263,7 +208,7 @@ export const goGoroutinesScheduler: Lesson = {
           note: {
             tone: "warning",
             title: "Common trap",
-            text: "\"Cheap\" means cheap to *create*, not free to *ignore*. Each goroutine still uses memory and may hold resources (a database connection, a lock). Starting a goroutine you never wait for — a bare `go f()` whose result nothing consumes — is usually a bug, not a shortcut.",
+            text: '"Cheap" means cheap to *create*, not free to *ignore*. Each goroutine still uses memory and may hold resources (a database connection, a lock). Starting a goroutine you never wait for — a bare `go f()` whose result nothing consumes — is usually a bug, not a shortcut.',
           },
         },
       ],
@@ -284,8 +229,7 @@ export const goGoroutinesScheduler: Lesson = {
           example: {
             title: "The argument is evaluated now; the body runs later",
             language: "go",
-            code:
-              'func main() {\n    i := 1\n    go fmt.Println(i) // i is read NOW (=1) when the go statement runs\n    i = 2             // this change is not seen by the goroutine above\n    time.Sleep(10 * time.Millisecond) // give the goroutine a chance (demo only)\n}\n// Prints: 1',
+            code: "func main() {\n    i := 1\n    go fmt.Println(i) // i is read NOW (=1) when the go statement runs\n    i = 2             // this change is not seen by the goroutine above\n    time.Sleep(10 * time.Millisecond) // give the goroutine a chance (demo only)\n}\n// Prints: 1",
             takeaway:
               "The `go` statement evaluates the function and its arguments immediately; only the call itself is deferred to the goroutine. So the argument froze at 1 — just like a deferred call freezes its arguments.",
           },
@@ -310,13 +254,37 @@ export const goGoroutinesScheduler: Lesson = {
             kind: "sequence",
             nodes: [
               { id: "run1", label: "M runs G1 (holds P)", detail: "the thread executes G1's code" },
-              { id: "block", label: "G1 blocks on a DB read", detail: "it must wait for the network reply", tone: "danger" },
-              { id: "park", label: "scheduler parks G1", detail: "G1 is set aside; it is not using the thread", tone: "accent" },
-              { id: "run2", label: "P runs G2 on the same M", detail: "the thread stays busy instead of idling", tone: "success" },
-              { id: "ready", label: "DB reply arrives", detail: "G1 becomes runnable again and rejoins a queue" },
-              { id: "resume", label: "G1 resumes later", detail: "picked up by a P when one is free" },
+              {
+                id: "block",
+                label: "G1 blocks on a DB read",
+                detail: "it must wait for the network reply",
+                tone: "danger",
+              },
+              {
+                id: "park",
+                label: "scheduler parks G1",
+                detail: "G1 is set aside; it is not using the thread",
+                tone: "accent",
+              },
+              {
+                id: "run2",
+                label: "P runs G2 on the same M",
+                detail: "the thread stays busy instead of idling",
+                tone: "success",
+              },
+              {
+                id: "ready",
+                label: "DB reply arrives",
+                detail: "G1 becomes runnable again and rejoins a queue",
+              },
+              {
+                id: "resume",
+                label: "G1 resumes later",
+                detail: "picked up by a P when one is free",
+              },
             ],
-            caption: "The blocked goroutine costs almost nothing — the thread simply runs a different goroutine while it waits.",
+            caption:
+              "The blocked goroutine costs almost nothing — the thread simply runs a different goroutine while it waits.",
           },
         },
       ],
@@ -329,8 +297,7 @@ export const goGoroutinesScheduler: Lesson = {
           example: {
             title: "Start many, then wait for all with sync.WaitGroup",
             language: "go",
-            code:
-              'func saveAll(txs []Tx) {\n    var wg sync.WaitGroup\n    for _, tx := range txs {\n        wg.Add(1) // register one goroutine BEFORE starting it\n        go func() {\n            defer wg.Done() // mark this one done however it exits\n            save(tx)\n        }()\n    }\n    wg.Wait() // block here until every goroutine has called Done\n    // now it is safe to continue: all saves have finished\n}',
+            code: "func saveAll(txs []Tx) {\n    var wg sync.WaitGroup\n    for _, tx := range txs {\n        wg.Add(1) // register one goroutine BEFORE starting it\n        go func() {\n            defer wg.Done() // mark this one done however it exits\n            save(tx)\n        }()\n    }\n    wg.Wait() // block here until every goroutine has called Done\n    // now it is safe to continue: all saves have finished\n}",
             takeaway:
               "Add before you start, Done as you finish, Wait before you continue. The function no longer returns until every goroutine is truly done. (Go 1.22+ gives each iteration its own `tx`, so the closure captures the right one.)",
           },
@@ -346,7 +313,7 @@ export const goGoroutinesScheduler: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. Consider this program on a machine where GOMAXPROCS is 1 (only one goroutine can run at a time):\n\n```\nfunc main() {\n    go fmt.Println(\"A\")\n    go fmt.Println(\"B\")\n    fmt.Println(\"main\")\n}\n```\n\nWhat prints, and can you rely on the order? Commit to an answer.\n\nHere's the trace. `main` starts goroutine A, starts goroutine B, then prints \"main\" itself — and then main returns. Even with GOMAXPROCS at 1, the two goroutines are runnable, but main never gave up the thread or waited, so it ran to its end first. When main returns the program exits and A and B are killed. The reliable output is just **main**; \"A\" and \"B\" might occasionally slip in on faster timing, but you cannot count on it. The lesson: order and even *whether* a goroutine runs is not guaranteed unless you synchronize — and GOMAXPROCS controls parallelism, not whether main waits.",
+      body: 'Predict before you read on — a wrong guess you correct sticks better than a right answer you skimmed. Consider this program on a machine where GOMAXPROCS is 1 (only one goroutine can run at a time):\n\n```\nfunc main() {\n    go fmt.Println("A")\n    go fmt.Println("B")\n    fmt.Println("main")\n}\n```\n\nWhat prints, and can you rely on the order? Commit to an answer.\n\nHere\'s the trace. `main` starts goroutine A, starts goroutine B, then prints "main" itself — and then main returns. Even with GOMAXPROCS at 1, the two goroutines are runnable, but main never gave up the thread or waited, so it ran to its end first. When main returns the program exits and A and B are killed.\n\nThe reliable output is just **main**; "A" and "B" might occasionally slip in on faster timing, but you cannot count on it. The lesson: order and even *whether* a goroutine runs is not guaranteed unless you synchronize — and GOMAXPROCS controls parallelism, not whether main waits.',
     },
     "failure-cases": {
       body: "The failures here cluster around two misunderstandings: forgetting that main's return kills everything, and confusing cheap-to-create with free-to-run-unbounded. Here are the ones you'll actually meet.",
@@ -366,8 +333,7 @@ export const goGoroutinesScheduler: Lesson = {
           example: {
             title: "Sleep is not synchronization",
             language: "go",
-            code:
-              'func main() {\n    go doWork()\n    time.Sleep(100 * time.Millisecond) // HOPE it finished in time — it might not\n}\n\n// Correct: actually wait for it.\nfunc main() {\n    var wg sync.WaitGroup\n    wg.Add(1)\n    go func() { defer wg.Done(); doWork() }()\n    wg.Wait() // guaranteed: doWork has finished\n}',
+            code: "func main() {\n    go doWork()\n    time.Sleep(100 * time.Millisecond) // HOPE it finished in time — it might not\n}\n\n// Correct: actually wait for it.\nfunc main() {\n    var wg sync.WaitGroup\n    wg.Add(1)\n    go func() { defer wg.Done(); doWork() }()\n    wg.Wait() // guaranteed: doWork has finished\n}",
             takeaway:
               "A sleep guesses how long the work takes; a WaitGroup knows when it's actually done. Never use time.Sleep to wait for a goroutine.",
           },
@@ -410,29 +376,6 @@ export const goGoroutinesScheduler: Lesson = {
           },
         },
       ],
-    },
-    ledgerflow: {
-      body: "This is exactly how LedgerFlow processes a batch of transactions. Instead of recording them one strictly after another, it fans them out across goroutines so the time each one spends waiting on the database overlaps with the others' work. But it does two disciplined things: it caps the number running at once to the size of the database connection pool (so it never oversubscribes the database), and it uses a `sync.WaitGroup` to wait for every transaction to finish before the request handler returns its response — so a client never gets \"done\" while writes are still in flight, and no save is killed by the handler returning early.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: bounded concurrent transaction processing",
-            kind: "sequence",
-            nodes: [
-              { id: "in", label: "Batch of transactions arrives", detail: "e.g. 5,000 to persist" },
-              { id: "pool", label: "Start N workers (N = pool size)", detail: "cap concurrency to the DB connections", tone: "accent" },
-              { id: "work", label: "Workers process concurrently", detail: "one blocked on the DB lets others proceed" },
-              { id: "wait", label: "wg.Wait() for all", detail: "handler blocks until every save is done" },
-              { id: "resp", label: "Return the response", detail: "reported done only when it truly is", tone: "success" },
-            ],
-            caption: "Concurrency for speed, a bound for safety, and a wait so the response never lies.",
-          },
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about goroutines\" into \"I reach for a WaitGroup without thinking.\" Work across predicting what a fire-and-forget program prints, reading argument-evaluation timing, implementing a correct wait, debugging a dropped-work leak, and designing a bounded workload. Each produces a different kind of evidence — do them, don't just read them.",
     },
     mastery: {
       body: "You've mastered this when you can explain why a goroutine is cheaper than an OS thread and how the runtime multiplexes many onto a few, predict what a program prints when main returns before a goroutine runs, write code that starts several goroutines and reliably waits for all of them, and design a workload that caps concurrency to a scarce resource. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",

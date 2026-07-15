@@ -1,7 +1,7 @@
 import type { Lesson } from "../../../packages/content-schema/src/index";
 
 /**
- * Module 6 — data races: what they really are, why they are undefined behavior
+ * Module 6 — data races: what they really are, why they break ordinary reasoning
  * (not just a wrong number), and how to find and kill them with the race
  * detector. Written in the Module 0–5 voice: plain language, one analogy per
  * hard idea, a concrete example before every abstract rule. The throughline is
@@ -14,22 +14,17 @@ export const goRacesDetector: Lesson = {
   slug: "races-detector",
   title: "Data races & the race detector",
   description:
-    "Learn what a data race actually is — unsynchronized concurrent access where at least one goroutine writes — why it is undefined behavior, and how to detect and eliminate it with Go's race detector.",
+    "Learn what a data race is — unsynchronized concurrent access where at least one goroutine writes — why the result is unreliable, and how to detect and eliminate it with Go's race detector.",
   moduleId: "go-6",
   estimatedMinutes: 50,
   difficulty: "advanced",
   prerequisites: ["go-sync-atomic"],
   learningObjectives: [
-    "Define a data race precisely and explain why it is undefined behavior, not merely a wrong value",
+    "Define a data race precisely and explain why ordinary sequential reasoning no longer applies",
     "Establish a happens-before relationship with a mutex, atomics, or a channel to make concurrent access safe",
     "Use `go test -race` and `go run -race` against real tests and load to detect and eliminate races",
   ],
   concepts: ["data-race", "race-detector", "happens-before"],
-  ledgerFlowApplications: [
-    "Prove that concurrent balance updates in LedgerFlow are race-free before trusting any total",
-    "Run the LedgerFlow test suite under `go test -race` in CI so a race fails the build instead of shipping",
-    "Guard shared in-memory state (a cache, a running total) with a mutex or atomic that establishes ordering",
-  ],
   references: [
     {
       title: "Introducing the Go Race Detector",
@@ -38,7 +33,7 @@ export const goRacesDetector: Lesson = {
         "What the race detector is, how to turn it on with `-race`, and the key limitation that it only reports races that actually execute at runtime.",
       relevance:
         "This is the canonical introduction to the exact tool the lesson teaches, straight from the Go team.",
-      required: true,
+      required: false,
       section: "How to use it; A limitation",
     },
     {
@@ -48,7 +43,7 @@ export const goRacesDetector: Lesson = {
         "The full usage reference — the four supported `-race` commands, how to read the two conflicting-access report, and the runtime and memory cost that makes it a testing tool.",
       relevance:
         "Backs the mechanics of reading a race report and the 'testing tool, not production' trade-off in this lesson.",
-      required: true,
+      required: false,
       section: "Usage; Report format; Options; Runtime overhead",
     },
     {
@@ -145,7 +140,7 @@ export const goRacesDetector: Lesson = {
       id: "explain-data-race",
       kind: "explain",
       description:
-        "Define a data race precisely (concurrent access, at least one write, no synchronization) and explain why it is undefined behavior rather than just a wrong value.",
+        "Define a data race precisely (concurrent access, at least one write, no synchronization) and explain why its result cannot be treated like an ordinary sequence of operations.",
       required: true,
     },
     {
@@ -160,7 +155,7 @@ export const goRacesDetector: Lesson = {
       kind: "debug",
       description:
         "Use `go test -race` / `go run -race` against real tests or load to detect a race and read the two conflicting stacks it reports.",
-      required: true,
+      required: false,
     },
     {
       id: "design-race-vs-condition",
@@ -192,73 +187,8 @@ export const goRacesDetector: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "Here's the model most people bring when they first see this: '`counter++` is one small operation, so if two goroutines both run it, the worst that happens is the order is weird — but each `+1` still lands.' That feels obviously true. It's wrong.\n\n`counter++` is not one step. It's three: **read** the current value, **add** one, **write** the result back. Two goroutines can both read the same old value, both add one, and both write the same new value — so two increments produce only one. The naive mental model treats a read-modify-write as atomic when it isn't, and that single misconception is the root of almost every counter bug.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "`counter++` is three operations, not one",
-            language: "go",
-            code: "var counter int\n\n// What you wrote:\ncounter++\n\n// What actually happens:\ntmp := counter // 1. read\ntmp = tmp + 1  // 2. modify\ncounter = tmp  // 3. write\n\n// Two goroutines can both read the same `counter` at step 1,\n// then both write the same value at step 3 — one increment is lost.",
-            takeaway: "A read-modify-write is not atomic. Without synchronization, concurrent increments overwrite each other.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "`counter++` = read, then modify, then write — three separate steps.",
-            "Concurrent goroutines can interleave those steps and lose updates.",
-            "The bug isn't 'weird ordering' — it's genuinely missing increments.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "So you write the obvious concurrent counter: N goroutines, each doing `counter++`, a WaitGroup to wait for them all. You run it and get 1000. It looks correct, so it ships.\n\nThen it fails in ways that make no sense. Run it again and you get 987. Again, 1000. Again, 994. The total is wrong and it's *different every time*, because the answer depends on how the scheduler happened to interleave the goroutines this run. Worse, a data race is **undefined behavior** in Go — the language makes no promise about what happens at all. With a plain `int` you usually just get a wrong number, but a racy write to something like a map can corrupt internal structure and crash the program. It is not 'a slightly wrong value'; it's a program the language has stopped making guarantees about.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "The counter that's wrong a different amount each run",
-            language: "go",
-            code: 'func main() {\n\tvar counter int\n\tvar wg sync.WaitGroup\n\tfor i := 0; i < 1000; i++ {\n\t\twg.Add(1)\n\t\tgo func() {\n\t\t\tdefer wg.Done()\n\t\t\tcounter++ // DATA RACE\n\t\t}()\n\t}\n\twg.Wait()\n\tfmt.Println(counter)\n}\n\n// $ go run main.go\n// 987\n// $ go run main.go\n// 1000\n// $ go run main.go\n// 994',
-            takeaway: "Nondeterministic, run-to-run variation in a shared total is the fingerprint of a data race.",
-          },
-        },
-        {
-          type: "note",
-          note: {
-            tone: "warning",
-            title: "It's undefined behavior, not a wrong number",
-            text: "A data race isn't 'the value is off by a bit'. Go's memory model makes NO guarantees about a program with a data race. A racy `int` usually gives a wrong count; a racy map write can corrupt memory and crash. Treat every race as a correctness bug, not a rounding error.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Replace the folklore with one clean idea: **a data race is a missing ordering.** When two goroutines touch the same memory and at least one writes, the program only has a defined meaning if *something* guarantees which access happens first. That guarantee has a name — **happens-before** — and it's the whole game.\n\nHappens-before is simple to state: it's a promise that one memory operation is *observed to complete before* another. If your increments have a happens-before ordering (this one finishes, then the next one starts), no update can land on top of another and the total is exact. If there's no such ordering, you have a race. So the fix is never 'sprinkle a lock somewhere' — it's 'establish a happens-before relationship between the conflicting accesses'. A mutex, an atomic operation, or a channel each do exactly that.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "info",
-            title: "Jargon, defined",
-            text: "Happens-before: a guarantee that one memory operation is observed to complete before another begins. Data race: concurrent access to the same memory, at least one a write, with NO happens-before ordering between them. The fix for a race is always to add a happens-before ordering.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "A race = same memory + at least one write + **no happens-before ordering**.",
-            "**Happens-before** = a guarantee that one operation completes before another is observed.",
-            "The fix is to *create* that ordering — with a mutex, atomics, or a channel.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
-      body: "Hold three facts and everything else follows.\n\nFirst, **synchronization is what creates happens-before.** A `sync.Mutex` unlock happens-before the next lock of the same mutex; a `sync/atomic` operation orders accesses to that one variable; a send on a channel happens-before the corresponding receive. Any of these turns 'two unordered accesses' into 'a defined order'. Second, **you only need synchronization for *shared, mutable* memory.** A value only one goroutine ever touches, or one nobody writes after startup, can't race. Third, **a data race is not the same as a race condition.** A data race is a low-level memory bug (unsynchronized access); a race condition is a *logic* bug about the order of operations — and you can have one without the other.",
+      body: "Hold three facts and everything else follows.\n\nFirst, **synchronization is what creates happens-before. ** A `sync.Mutex` unlock happens-before the next lock of the same mutex; a `sync/atomic` operation orders accesses to that one variable; a send on a channel happens-before the corresponding receive. Any of these turns 'two unordered accesses' into 'a defined order'. Second, **you only need synchronization for *shared, mutable* memory.\n\n** A value only one goroutine ever touches, or one nobody writes after startup, can't race. Third, **a data race is not the same as a race condition. ** A data race is a low-level memory bug (unsynchronized access); a race condition is a *logic* bug about the order of operations — and you can have one without the other.",
       blocks: [
         {
           type: "note",
@@ -287,11 +217,28 @@ export const goRacesDetector: Lesson = {
             title: "Two increments, without and with a lock",
             kind: "compare",
             nodes: [
-              { id: "racy", label: "No synchronization", detail: "G1 reads 41 · G2 reads 41 · G1 writes 42 · G2 writes 42 → lost update", tone: "danger" },
-              { id: "safe", label: "Mutex-ordered", detail: "G1 lock→read 41→write 42→unlock · then G2 lock→read 42→write 43 → correct", tone: "success" },
-              { id: "why", label: "The difference", detail: "the unlock/lock pair establishes happens-before between the two increments", tone: "accent" },
+              {
+                id: "racy",
+                label: "No synchronization",
+                detail: "G1 reads 41 · G2 reads 41 · G1 writes 42 · G2 writes 42 → lost update",
+                tone: "danger",
+              },
+              {
+                id: "safe",
+                label: "Mutex-ordered",
+                detail: "G1 lock→read 41→write 42→unlock · then G2 lock→read 42→write 43 → correct",
+                tone: "success",
+              },
+              {
+                id: "why",
+                label: "The difference",
+                detail:
+                  "the unlock/lock pair establishes happens-before between the two increments",
+                tone: "accent",
+              },
             ],
-            caption: "Same two goroutines. The lock doesn't slow the logic down conceptually — it imposes an order so no update lands on top of another.",
+            caption:
+              "Same two goroutines. The lock doesn't slow the logic down conceptually — it imposes an order so no update lands on top of another.",
           },
         },
         {
@@ -313,13 +260,37 @@ export const goRacesDetector: Lesson = {
             title: "How the race detector decides",
             kind: "flow",
             nodes: [
-              { id: "instr", label: "instrument", detail: "-race rewrites memory accesses at build time" },
-              { id: "watch", label: "observe run", detail: "records goroutine + address + synchronization per access" },
-              { id: "check", label: "same address, a write, no happens-before?", detail: "checked as the program actually executes", tone: "accent" },
-              { id: "clean", label: "no report", detail: "no conflicting access was observed this run", tone: "success" },
-              { id: "report", label: "WARNING: DATA RACE", detail: "prints both conflicting stacks + goroutines", tone: "danger" },
+              {
+                id: "instr",
+                label: "instrument",
+                detail: "-race rewrites memory accesses at build time",
+              },
+              {
+                id: "watch",
+                label: "observe run",
+                detail: "records goroutine + address + synchronization per access",
+              },
+              {
+                id: "check",
+                label: "same address, a write, no happens-before?",
+                detail: "checked as the program actually executes",
+                tone: "accent",
+              },
+              {
+                id: "clean",
+                label: "no report",
+                detail: "no conflicting access was observed this run",
+                tone: "success",
+              },
+              {
+                id: "report",
+                label: "WARNING: DATA RACE",
+                detail: "prints both conflicting stacks + goroutines",
+                tone: "danger",
+              },
             ],
-            caption: "It reports only races it actually observes executing — so you must run it against code paths that really run (real tests, real load).",
+            caption:
+              "It reports only races it actually observes executing — so you must run it against code paths that really run (real tests, real load).",
           },
         },
       ],
@@ -333,7 +304,8 @@ export const goRacesDetector: Lesson = {
             title: "Detecting and fixing the race with -race",
             language: "go",
             code: 'package main\n\nimport (\n\t"fmt"\n\t"sync"\n)\n\nfunc main() {\n\tvar counter int\n\tvar mu sync.Mutex // add the lock\n\tvar wg sync.WaitGroup\n\tfor i := 0; i < 1000; i++ {\n\t\twg.Add(1)\n\t\tgo func() {\n\t\t\tdefer wg.Done()\n\t\t\tmu.Lock()\n\t\t\tcounter++ // now inside the critical section\n\t\t\tmu.Unlock()\n\t\t}()\n\t}\n\twg.Wait()\n\tfmt.Println(counter) // reliably 1000\n}\n\n// Before the fix:\n// $ go run -race main.go\n// ==================\n// WARNING: DATA RACE\n// Write at 0x00c0000b4010 by goroutine 8:\n//   main.main.func1()\n//       main.go:15 +0x...\n// Previous read at 0x00c0000b4010 by goroutine 7:\n//   main.main.func1()\n//       main.go:15 +0x...\n// ==================\n//\n// After the fix: (no output, exit 0)',
-            takeaway: "`-race` names both conflicting accesses and their goroutines. The mutex adds happens-before, and the report disappears.",
+            takeaway:
+              "`-race` names both conflicting accesses and their goroutines. The mutex adds happens-before, and the report disappears.",
           },
         },
         {
@@ -347,7 +319,7 @@ export const goRacesDetector: Lesson = {
       ],
     },
     experiment: {
-      body: "Before reading on, make a prediction — a corrected wrong guess sticks better than a right answer you skimmed. You take the racy counter (no lock) and run it *without* `-race` a hundred times; sometimes it prints 1000, sometimes less. Then you run it *once* with `go run -race`.\n\nQuestion: to be confident this program has a bug, is it better to run it 100 times normally, or once with `-race`? And why can the normal runs mislead you? Decide now, then reveal.\n\nThe answer: **once with `-race` is far stronger evidence.** Run normally, a racy program frequently prints the 'right' answer purely by luck of scheduling — so a green run proves nothing, and even 100 green runs don't prove the code is safe. The detector doesn't wait for the bug to produce a visibly wrong number; it flags the *unsynchronized access itself* the moment it observes it, whether or not this run happened to lose an increment. That's the whole point: it turns a rare, timing-dependent symptom into a deterministic report. The catch, from the same fact: it can only report races on code that actually executes during that run — so you must point it at real tests and real load, not a trivial happy path.",
+      body: "Before reading on, make a prediction — a corrected wrong guess sticks better than a right answer you skimmed. You take the racy counter (no lock) and run it *without* `-race` a hundred times; sometimes it prints 1000, sometimes less. Then you run it *once* with `go run -race`.\n\nQuestion: to be confident this program has a bug, is it better to run it 100 times normally, or once with `-race`? And why can the normal runs mislead you? Decide now, then reveal.\n\nThe answer: **once with `-race` is far stronger evidence. ** Run normally, a racy program frequently prints the 'right' answer purely by luck of scheduling — so a green run proves nothing, and even 100 green runs don't prove the code is safe.\n\nThe detector doesn't wait for the bug to produce a visibly wrong number; it flags the *unsynchronized access itself* the moment it observes it, whether or not this run happened to lose an increment. That's the whole point: it turns a rare, timing-dependent symptom into a deterministic report.\n\nThe catch, from the same fact: it can only report races on code that actually executes during that run — so you must point it at real tests and real load, not a trivial happy path.",
     },
     "failure-cases": {
       body: "The mistakes here are rarely loud crashes at first — they're silent corruption and false confidence. Here are the ones you'll actually meet and the signal each gives.",
@@ -398,7 +370,7 @@ export const goRacesDetector: Lesson = {
       ],
     },
     design: {
-      body: "Turn this into durable habits. Design so that shared mutable state is rare and obvious: prefer giving each goroutine its own data, or passing ownership over a channel, so there's nothing to race on. Where you genuinely must share, pick the lightest tool that establishes happens-before — an atomic for one counter, a mutex for a critical section — and keep the critical section small. Most importantly, make `go test -race` part of CI so a race fails the build instead of reaching production. And remember the boundary: the detector proves the *absence of data races on the paths you run*, not the correctness of your *logic* — those race conditions are still yours to reason about.",
+      body: "Turn this into durable habits. Design so that shared mutable state is rare and obvious: prefer giving each goroutine its own data, or passing ownership over a channel, so there's nothing to race on. Where you genuinely must share, pick the lightest tool that establishes happens-before — an atomic for one counter, a mutex for a critical section — and keep the critical section small.\n\nMost importantly, make `go test -race` part of CI so a race fails the build instead of reaching production. And remember the boundary: the detector proves the *absence of data races on the paths you run*, not the correctness of your *logic* — those race conditions are still yours to reason about.",
       blocks: [
         {
           type: "points",
@@ -420,41 +392,16 @@ export const goRacesDetector: Lesson = {
         },
       ],
     },
-    ledgerflow: {
-      body: "Here's the lesson applied to the project you'll build. LedgerFlow must never report a wrong balance, and balances get updated concurrently — several requests can post transactions to the same account at once. A single unsynchronized `balance += amount` is a data race, which means an occasionally-wrong total that no amount of normal testing reliably catches. That's unacceptable for money.\n\nSo LedgerFlow does two things. First, it establishes happens-before on every shared balance update — a mutex around the read-decide-write for a running in-memory total, or an atomic for a simple counter — so concurrent updates are strictly ordered and no post is lost. Second, it runs the whole test suite under `go test -race` in CI, including tests that fan out many concurrent posts, so any missing synchronization fails the build instead of shipping. The discipline is 'establish ordering, then prove it with the detector' — exactly what money-handling code demands.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "A race-free concurrent balance, provable with -race",
-            language: "go",
-            code: 'type Account struct {\n\tmu      sync.Mutex\n\tbalance int64 // cents\n}\n\n// Hold the lock across the WHOLE read-decide-write so both the data race\n// and the check-then-act race condition are eliminated.\nfunc (a *Account) Withdraw(cents int64) error {\n\ta.mu.Lock()\n\tdefer a.mu.Unlock()\n\tif a.balance < cents {\n\t\treturn errors.New("insufficient funds")\n\t}\n\ta.balance -= cents\n\treturn nil\n}\n\n// In CI:  go test -race ./...\n// A test firing 100 concurrent Withdraw calls must run clean.',
-            takeaway: "Locking the entire decision (not each step) kills both the data race and the race condition; `go test -race` in CI proves it stays that way.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Every shared balance update must establish happens-before — mutex or atomic, never a bare `+=`.",
-            "Hold the lock across the whole read-decide-write, not each access, to avoid a check-then-act race condition.",
-            "Run `go test -race ./...` with concurrent tests in CI so a race fails the build.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns 'I recognize a race' into 'I can detect and eliminate one'. Work across prediction, code-reading, implementation, debugging, refactoring, and design — plus one advanced task that has you *prove* both a race and its fix with `-race`. Each type produces different evidence, so finishing one doesn't cover the rest.",
-    },
     mastery: {
-      body: "You've mastered this lesson when you can do four things without notes: define a data race precisely and explain why it's undefined behavior rather than a wrong value, make a racy counter correct by establishing a happens-before relationship with a mutex, atomic, or channel, use `go test -race` against real tests or load and read the two conflicting stacks it reports, and distinguish a data race from a race condition while defending a design that eliminates both. Check a criterion only when you genuinely have that evidence — reading the stage doesn't count.",
+      body: "You understand this lesson when you can define a data race, make a racy counter correct with synchronization, run `go test -race` and read the conflicting stacks it reports, and distinguish a data race from a broader race condition.",
     },
     summary: {
-      body: "One idea carries this whole lesson: **a data race is a missing happens-before, and the fix is to establish one.** Two goroutines touching the same memory with at least one writing and no ordering between them is undefined behavior — not a slightly wrong number, but a program Go stops guaranteeing anything about. Establish ordering with a mutex, an atomic, or a channel, and run the race detector against real tests and load to prove none remain.",
+      body: "One idea carries this lesson: **a data race is missing synchronization, and the fix is to establish ordering.** When two goroutines access the same memory, at least one writes, and neither access happens before the other, ordinary sequential reasoning does not apply. Establish ordering with a mutex, an atomic, or a channel, then run the race detector against realistic tests.",
       blocks: [
         {
           type: "points",
           items: [
-            "Data race = same memory + at least one write + no happens-before → undefined behavior.",
+            "Data race = same memory + at least one write + no happens-before relationship.",
             "`counter++` is a read-modify-write, not atomic; concurrent unsynchronized increments lose updates.",
             "Fix by establishing happens-before: a mutex, `sync/atomic`, or a channel.",
             "Detect with `go run -race` / `go test -race` / `go build -race`; it reports only executed races, so run it against real tests and load, and never in production.",

@@ -23,33 +23,33 @@ export const goChannelsSelect: Lesson = {
     "Wait on multiple channel operations with select, including a non-blocking default, without deadlocking",
   ],
   concepts: ["channels", "select", "buffering", "close"],
-  ledgerFlowApplications: [
-    "Fan a batch of balance recalculations out to worker goroutines and collect their results over one channel",
-    "Signal graceful shutdown to every worker by closing a single done channel",
-    "Use select with a timeout so a slow downstream call never blocks a request handler forever",
-  ],
   references: [
     {
       title: "A Tour of Go — Channels",
       url: "https://go.dev/tour/concurrency/2",
-      teaches: "The basic send/receive syntax, buffering, and how a channel synchronizes two goroutines.",
-      relevance: "Grounds the core mechanics of make, <-, and buffered vs unbuffered channels this lesson turns on.",
-      required: true,
+      teaches:
+        "The basic send/receive syntax, buffering, and how a channel synchronizes two goroutines.",
+      relevance:
+        "Grounds the core mechanics of make, <-, and buffered vs unbuffered channels this lesson turns on.",
+      required: false,
       section: "Channels; Buffered Channels; Range and Close; Select",
     },
     {
       title: "Effective Go — Channels",
       url: "https://go.dev/doc/effective_go#channels",
-      teaches: "Idiomatic channel patterns and the rules for closing, ranging, and directional channel types.",
-      relevance: "Backs the close discipline and directional-type design rules the lesson insists on.",
-      required: true,
+      teaches:
+        "Idiomatic channel patterns and the rules for closing, ranging, and directional channel types.",
+      relevance:
+        "Backs the close discipline and directional-type design rules the lesson insists on.",
+      required: false,
       section: "Channels",
     },
     {
       title: "Go Concurrency Patterns: Pipelines and cancellation",
       url: "https://go.dev/blog/pipelines",
-      teaches: "How to chain channel stages into pipelines and cancel them cleanly by closing a done channel.",
-      relevance: "Extends the fan-out/collect pattern into the LedgerFlow application and the advanced exercise.",
+      teaches:
+        "How to chain channel stages into pipelines and cancel them cleanly by closing a done channel.",
+      relevance: "Extends fan-out and collection into a complete pipeline with cancellation.",
       required: false,
       section: "Fan-out, fan-in; Explicit cancellation",
     },
@@ -85,7 +85,7 @@ export const goChannelsSelect: Lesson = {
       starterCode:
         'package main\n\nimport "fmt"\n\nfunc partial(nums []int, ch chan<- int) {\n  s := 0\n  for _, n := range nums {\n    s += n\n  }\n  // send the partial sum on ch\n}\n\nfunc sum(nums []int) int {\n  ch := make(chan int)\n  mid := len(nums) / 2\n  // start two goroutines over the two halves, then receive both results\n  return 0\n}\n\nfunc main() { fmt.Println(sum([]int{1, 2, 3, 4, 5})) }',
       expectedAnswer:
-        'func partial(nums []int, ch chan<- int) {\n  s := 0\n  for _, n := range nums {\n    s += n\n  }\n  ch <- s\n}\n\nfunc sum(nums []int) int {\n  ch := make(chan int)\n  mid := len(nums) / 2\n  go partial(nums[:mid], ch)\n  go partial(nums[mid:], ch)\n  a, b := <-ch, <-ch\n  return a + b\n}',
+        "func partial(nums []int, ch chan<- int) {\n  s := 0\n  for _, n := range nums {\n    s += n\n  }\n  ch <- s\n}\n\nfunc sum(nums []int) int {\n  ch := make(chan int)\n  mid := len(nums) / 2\n  go partial(nums[:mid], ch)\n  go partial(nums[mid:], ch)\n  a, b := <-ch, <-ch\n  return a + b\n}",
       hints: [
         "The channel is send-only (chan<- int) inside partial — just `ch <- s`.",
         "Two goroutines each send once, so main receives exactly twice and adds the results.",
@@ -179,7 +179,7 @@ export const goChannelsSelect: Lesson = {
           note: {
             tone: "info",
             title: "Go's motto for this",
-            text: "\"Don't communicate by sharing memory; share memory by communicating.\" Instead of guarding shared state with locks, pass the state itself down a channel so only one goroutine holds it at a time.",
+            text: '"Don\'t communicate by sharing memory; share memory by communicating." Instead of guarding shared state with locks, pass the state itself down a channel so only one goroutine holds it at a time.',
           },
         },
         {
@@ -192,66 +192,6 @@ export const goChannelsSelect: Lesson = {
         },
       ],
     },
-    naive: {
-      body: "The instinct carried over from most languages is to coordinate goroutines with shared variables: a global `results` slice that every worker appends to, or a `done bool` flag that a worker flips when it's finished. It looks simple and it even seems to work on the first run.\n\nThe trouble is that plain reads and writes across goroutines have **no ordering guarantees**. Two goroutines appending to the same slice can interleave and clobber each other. A `done` flag written by one goroutine may never become visible to another, so the reader spins forever. These bugs are timing-dependent, so they pass in testing and fail in production.",
-      blocks: [
-        {
-          type: "example",
-          example: {
-            title: "Shared-variable coordination that races",
-            language: "go",
-            code:
-              'var results []int // shared by every worker — no protection\n\nfunc worker(n int) {\n    results = append(results, n*n) // two workers here can corrupt the slice\n}\n\nfunc main() {\n    for i := 0; i < 3; i++ {\n        go worker(i)\n    }\n    // ...and how does main even know the workers are done?\n    fmt.Println(results) // probably empty, possibly garbage\n}',
-            takeaway:
-              "Concurrent appends to one slice are a data race, and main has no reliable way to know when the workers finished. `go run -race` flags this immediately.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Concurrent writes to the same variable are a **data race** — undefined behavior, not just a wrong number.",
-            "A shared flag gives you no guarantee the other goroutine will ever *see* the new value.",
-            "You also have no clean signal for \"all the work is finished\" — main races ahead.",
-          ],
-        },
-      ],
-    },
-    failure: {
-      body: "The shared-variable approach fails in the nastiest possible way: intermittently. Because the outcome depends on the exact interleaving of goroutines — which the scheduler decides differently each run — the bug appears once in a thousand runs, never on your laptop, and only under production load.\n\nThe root problem is that a plain variable carries no notion of *when* it is safe to read. There's no moment that says \"the value is ready now.\" A channel bakes that moment in: a receive cannot complete until a matching send has happened, so the hand-off *is* the synchronization point.",
-      blocks: [
-        {
-          type: "scenario",
-          scenario: {
-            title: "The 'done' flag that never arrives",
-            context:
-              "A background goroutine sets `ready = true` when it finishes loading a cache. The main goroutine loops `for !ready {}` waiting for it. On the developer's machine it works; in production it sometimes hangs forever, pinning a CPU core at 100%.",
-            insight:
-              "Without a synchronizing operation, the compiler and CPU are free to keep `ready` in a register the loop never re-reads. The write may never become visible. A channel receive is a synchronization point — the value is guaranteed visible once received.",
-          },
-        },
-      ],
-    },
-    intuition: {
-      body: "Here's the mental image for the most important case, the **unbuffered** channel. Picture a hand-off that requires both people to be present at the same instant — like passing a baton in a relay race. The runner holding the baton (the sender) must wait, arm out, until the next runner (the receiver) is there to grab it. Equally, a receiver who arrives early waits, hand open, until a sender shows up. Neither proceeds until the exchange happens. This meeting point is called a **rendezvous**.\n\nA **buffered** channel loosens this. Give it capacity — `make(chan int, 3)` — and it's like adding a small shelf between the two workers. The sender can drop up to three values on the shelf and walk away without anyone waiting to receive. Only when the shelf is full does a send have to wait; only when it's empty does a receive have to wait.",
-      blocks: [
-        {
-          type: "note",
-          note: {
-            tone: "tip",
-            title: "The one-line difference",
-            text: "Unbuffered = the send and the receive happen *together* (a rendezvous). Buffered = the send can run *ahead* of the receive, up to the buffer's capacity.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Unbuffered (`make(chan int)`): a send blocks until a receiver takes the value, and a receive blocks until a sender offers one.",
-            "Buffered (`make(chan int, N)`): a send blocks only when the buffer is full; a receive blocks only when it is empty.",
-            "In both cases the channel guarantees the received value is fully and safely visible to the receiver.",
-          ],
-        },
-      ],
-    },
     "mental-model": {
       body: "Reduce channels to a few rules and they stop surprising you. A send is `ch <- v`; a receive is `v := <-ch`. When a channel is **closed** with `close(ch)`, it means \"no more values will ever be sent.\" There are three iron rules about closing, and violating them is either a panic or a silent bug.\n\nRule 1: **only the sender closes a channel, never a receiver** — the sender is the one who knows no more values are coming. Rule 2: **sending on a closed channel panics** — it's a programming error, loud on purpose. Rule 3: **receiving from a closed channel returns immediately** with the element type's zero value; the comma-ok form `v, ok := <-ch` gives `ok == false` once the channel is closed and drained. One more: a **nil channel blocks forever** on both send and receive — occasionally useful in select, but usually a bug.",
       blocks: [
@@ -260,8 +200,7 @@ export const goChannelsSelect: Lesson = {
           example: {
             title: "Close, comma-ok, and range",
             language: "go",
-            code:
-              'ch := make(chan int, 2)\nch <- 10\nch <- 20\nclose(ch) // sender promises: nothing more will be sent\n\n// comma-ok: ok is false once the channel is closed AND drained\na, ok := <-ch // a=10, ok=true  (buffered value)\nb, ok := <-ch // b=20, ok=true  (buffered value)\nc, ok := <-ch // c=0,  ok=false (drained + closed → zero value)\n\n// range receives until the channel is closed and drained, then stops\nfor v := range ch { // this loop body never runs: ch is already drained\n    fmt.Println(v)\n}',
+            code: "ch := make(chan int, 2)\nch <- 10\nch <- 20\nclose(ch) // sender promises: nothing more will be sent\n\n// comma-ok: ok is false once the channel is closed AND drained\na, ok := <-ch // a=10, ok=true  (buffered value)\nb, ok := <-ch // b=20, ok=true  (buffered value)\nc, ok := <-ch // c=0,  ok=false (drained + closed → zero value)\n\n// range receives until the channel is closed and drained, then stops\nfor v := range ch { // this loop body never runs: ch is already drained\n    fmt.Println(v)\n}",
             takeaway:
               "Buffered values survive close and come out first; after they're drained, receives return the zero value with ok=false, and `for range` ends.",
           },
@@ -271,7 +210,7 @@ export const goChannelsSelect: Lesson = {
           note: {
             tone: "warning",
             title: "Common traps",
-            text: "Closing a channel twice panics; so does sending on a closed one. `ok == false` does NOT mean \"empty\" — a closed channel still hands out buffered values first. And you never *need* to close a channel just to free it (the GC handles that) — close it only to signal \"done\" to receivers.",
+            text: 'Closing a channel twice panics; so does sending on a closed one. `ok == false` does NOT mean "empty" — a closed channel still hands out buffered values first. And you never *need* to close a channel just to free it (the GC handles that) — close it only to signal "done" to receivers.',
           },
         },
       ],
@@ -284,8 +223,7 @@ export const goChannelsSelect: Lesson = {
           example: {
             title: "Directional types make the contract compile-checked",
             language: "go",
-            code:
-              'import "fmt"\n\n// send-only: this goroutine may only put values in and close.\nfunc produce(out chan<- int, n int) {\n    for i := 0; i < n; i++ {\n        out <- i\n    }\n    close(out) // the sender closes when done — its job, not the consumer\'s\n}\n\n// receive-only: this goroutine may only take values out.\nfunc consume(in <-chan int) {\n    for v := range in { // ends automatically when produce closes out\n        fmt.Println(v)\n    }\n}\n\nfunc main() {\n    ch := make(chan int)   // bidirectional here...\n    go produce(ch, 3)      // ...narrowed to send-only inside produce\n    consume(ch)            // ...and receive-only inside consume\n}',
+            code: 'import "fmt"\n\n// send-only: this goroutine may only put values in and close.\nfunc produce(out chan<- int, n int) {\n    for i := 0; i < n; i++ {\n        out <- i\n    }\n    close(out) // the sender closes when done — its job, not the consumer\'s\n}\n\n// receive-only: this goroutine may only take values out.\nfunc consume(in <-chan int) {\n    for v := range in { // ends automatically when produce closes out\n        fmt.Println(v)\n    }\n}\n\nfunc main() {\n    ch := make(chan int)   // bidirectional here...\n    go produce(ch, 3)      // ...narrowed to send-only inside produce\n    consume(ch)            // ...and receive-only inside consume\n}',
             takeaway:
               "One bidirectional channel is created, then passed as send-only or receive-only. The compiler now rejects a consumer that tries to close or send — the type states who owns which end.",
           },
@@ -334,12 +272,31 @@ export const goChannelsSelect: Lesson = {
             title: "An unbuffered send/receive, step by step",
             kind: "sequence",
             nodes: [
-              { id: "s1", label: "Goroutine A: ch <- 42", detail: "A blocks here — arm out, waiting for a receiver" },
-              { id: "s2", label: "Goroutine B reaches v := <-ch", detail: "the rendezvous is now possible" },
-              { id: "s3", label: "value 42 crosses the channel", detail: "hand-off happens atomically", tone: "accent" },
-              { id: "s4", label: "both A and B proceed", detail: "A's send and B's receive complete together", tone: "success" },
+              {
+                id: "s1",
+                label: "Goroutine A: ch <- 42",
+                detail: "A blocks here — arm out, waiting for a receiver",
+              },
+              {
+                id: "s2",
+                label: "Goroutine B reaches v := <-ch",
+                detail: "the rendezvous is now possible",
+              },
+              {
+                id: "s3",
+                label: "value 42 crosses the channel",
+                detail: "hand-off happens atomically",
+                tone: "accent",
+              },
+              {
+                id: "s4",
+                label: "both A and B proceed",
+                detail: "A's send and B's receive complete together",
+                tone: "success",
+              },
             ],
-            caption: "Neither goroutine moves past the operation until the other is ready. That is the rendezvous.",
+            caption:
+              "Neither goroutine moves past the operation until the other is ready. That is the rendezvous.",
           },
         },
       ],
@@ -352,8 +309,7 @@ export const goChannelsSelect: Lesson = {
           example: {
             title: "Fan out work, collect results over one channel",
             language: "go",
-            code:
-              'package main\n\nimport "fmt"\n\nfunc square(n int, out chan<- int) {\n    out <- n * n // each worker sends exactly one result\n}\n\nfunc main() {\n    nums := []int{2, 3, 4, 5}\n    results := make(chan int) // unbuffered is fine: receives keep pace\n\n    for _, n := range nums {\n        go square(n, results) // fan out: one goroutine per input\n    }\n\n    total := 0\n    for range nums { // collect exactly len(nums) results, then stop\n        total += <-results\n    }\n    fmt.Println(total) // 4 + 9 + 16 + 25 = 54 (order of arrival varies)\n}',
+            code: 'package main\n\nimport "fmt"\n\nfunc square(n int, out chan<- int) {\n    out <- n * n // each worker sends exactly one result\n}\n\nfunc main() {\n    nums := []int{2, 3, 4, 5}\n    results := make(chan int) // unbuffered is fine: receives keep pace\n\n    for _, n := range nums {\n        go square(n, results) // fan out: one goroutine per input\n    }\n\n    total := 0\n    for range nums { // collect exactly len(nums) results, then stop\n        total += <-results\n    }\n    fmt.Println(total) // 4 + 9 + 16 + 25 = 54 (order of arrival varies)\n}',
             takeaway:
               "Start N workers, receive N times. The count is known, so no close is needed — main simply receives exactly as many values as it fanned out.",
           },
@@ -363,8 +319,7 @@ export const goChannelsSelect: Lesson = {
           example: {
             title: "Open-ended stream: one owner closes, consumer ranges",
             language: "go",
-            code:
-              'func generate(out chan<- int) {\n    for i := 1; i <= 5; i++ {\n        out <- i\n    }\n    close(out) // the sole sender closes when the stream ends\n}\n\nfunc main() {\n    ch := make(chan int)\n    go generate(ch)\n    for v := range ch { // loop ends automatically when generate closes ch\n        fmt.Println(v)\n    }\n}',
+            code: "func generate(out chan<- int) {\n    for i := 1; i <= 5; i++ {\n        out <- i\n    }\n    close(out) // the sole sender closes when the stream ends\n}\n\nfunc main() {\n    ch := make(chan int)\n    go generate(ch)\n    for v := range ch { // loop ends automatically when generate closes ch\n        fmt.Println(v)\n    }\n}",
             takeaway:
               "When you don't know the count up front, let the single sender close the channel and consume with `for range` — the loop ends exactly when the channel closes.",
           },
@@ -380,7 +335,7 @@ export const goChannelsSelect: Lesson = {
       ],
     },
     experiment: {
-      body: "Predict before you read on — a wrong guess you correct sticks better than an answer you skimmed. Consider this program exactly as written, with nothing else running:\n\n```\nfunc main() {\n    ch := make(chan int) // unbuffered\n    ch <- 1              // send\n    fmt.Println(<-ch)    // receive\n}\n```\n\nDoes it print 1, or something else? Commit to an answer.\n\nHere's what actually happens: the program **deadlocks** and the runtime aborts with `fatal error: all goroutines are asleep - deadlock!`. The line `ch <- 1` is an unbuffered send, so it blocks until some *other* goroutine is ready to receive. But the only goroutine is `main`, and it is now frozen on that send — it never reaches the receive on the next line. With every goroutine blocked and none able to make progress, Go's runtime detects the deadlock and stops. The fix is to run the send and receive on different goroutines (e.g. `go func() { ch <- 1 }()` then `<-ch`), or to make the channel buffered with `make(chan int, 1)` so the send has somewhere to land without a waiting receiver.",
+      body: "Predict before you read on — a wrong guess you correct sticks better than an answer you skimmed. Consider this program exactly as written, with nothing else running:\n\n```\nfunc main() {\n    ch := make(chan int) // unbuffered\n    ch <- 1              // send\n    fmt.Println(<-ch)    // receive\n}\n```\n\nDoes it print 1, or something else? Commit to an answer.\n\nHere's what actually happens: the program **deadlocks** and the runtime aborts with `fatal error: all goroutines are asleep - deadlock! `. The line `ch <- 1` is an unbuffered send, so it blocks until some *other* goroutine is ready to receive. But the only goroutine is `main`, and it is now frozen on that send — it never reaches the receive on the next line.\n\nWith every goroutine blocked and none able to make progress, Go's runtime detects the deadlock and stops. The fix is to run the send and receive on different goroutines (e.g. `go func() { ch <- 1 }()` then `<-ch`), or to make the channel buffered with `make(chan int, 1)` so the send has somewhere to land without a waiting receiver.",
     },
     "failure-cases": {
       body: "Almost every channel bug is one of a handful of mistakes about *when an operation blocks* or *who is allowed to close*. Here are the ones you'll actually hit.",
@@ -401,8 +356,7 @@ export const goChannelsSelect: Lesson = {
           example: {
             title: "Send on a closed channel — a real panic",
             language: "go",
-            code:
-              'ch := make(chan int, 1)\nclose(ch)\nch <- 1 // panic: send on closed channel\n\n// Contrast: receiving from a closed channel is always safe.\nch2 := make(chan int)\nclose(ch2)\nv, ok := <-ch2 // v = 0, ok = false — no panic, returns immediately',
+            code: "ch := make(chan int, 1)\nclose(ch)\nch <- 1 // panic: send on closed channel\n\n// Contrast: receiving from a closed channel is always safe.\nch2 := make(chan int)\nclose(ch2)\nv, ok := <-ch2 // v = 0, ok = false — no panic, returns immediately",
             takeaway:
               "Closing changes the two ends asymmetrically: sending afterward panics, but receiving afterward is safe and returns the zero value with ok=false.",
           },
@@ -431,7 +385,7 @@ export const goChannelsSelect: Lesson = {
           note: {
             tone: "tip",
             title: "select in one glance",
-            text: "`select` waits on several channel operations and runs whichever is ready; if several are ready it picks one at random (so no case is starved). An optional `default` case runs immediately when nothing else is ready, turning the select into a non-blocking poll.",
+            text: "`select` waits on several channel operations and runs one that can proceed. If several are ready, Go makes a pseudo-random choice; this is not a fairness guarantee. An optional `default` runs immediately when no other case is ready, making the select non-blocking.",
           },
         },
         {
@@ -439,8 +393,7 @@ export const goChannelsSelect: Lesson = {
           example: {
             title: "select: race a result against a timeout, with cancellation",
             language: "go",
-            code:
-              'import "time"\n\nfunc fetch(done <-chan struct{}, result <-chan int) (int, error) {\n    select {\n    case v := <-result: // whichever is ready first wins\n        return v, nil\n    case <-time.After(200 * time.Millisecond):\n        return 0, fmt.Errorf("timed out")\n    case <-done: // closing done unblocks this case for every waiter\n        return 0, fmt.Errorf("cancelled")\n    }\n}',
+            code: 'import "time"\n\nfunc fetch(done <-chan struct{}, result <-chan int) (int, error) {\n    select {\n    case v := <-result: // whichever is ready first wins\n        return v, nil\n    case <-time.After(200 * time.Millisecond):\n        return 0, fmt.Errorf("timed out")\n    case <-done: // closing done unblocks this case for every waiter\n        return 0, fmt.Errorf("cancelled")\n    }\n}',
             takeaway:
               "One select waits on three possibilities at once. `time.After` gives a timeout channel; a closed `done` channel broadcasts cancellation to every goroutine selecting on it.",
           },
@@ -454,36 +407,6 @@ export const goChannelsSelect: Lesson = {
           ],
         },
       ],
-    },
-    ledgerflow: {
-      body: "This is exactly how LedgerFlow parallelizes work without races. When a batch import touches many accounts, the service fans each account's balance recalculation out to a worker goroutine and collects the recomputed balances over a single results channel — receiving exactly as many results as it dispatched, so nothing leaks. A `select` with `time.After` wraps any call to a slow downstream (say, a currency-rate lookup) so one stuck dependency can't block a request handler indefinitely.\n\nShutdown uses the close-as-broadcast trick: the server holds one `done` channel, every worker `select`s on it, and closing `done` once signals *all* of them to stop and drain — no per-worker bookkeeping, no missed signal.",
-      blocks: [
-        {
-          type: "diagram",
-          diagram: {
-            title: "LedgerFlow: fan out recalculations, collect over one channel",
-            kind: "flow",
-            nodes: [
-              { id: "batch", label: "batch of accounts", detail: "N accounts need balance recalculation" },
-              { id: "fanout", label: "go worker per account", detail: "each computes one balance", tone: "accent" },
-              { id: "results", label: "results chan", detail: "workers send; coordinator receives N times" },
-              { id: "collect", label: "combine + persist", detail: "aggregate the N balances", tone: "success" },
-            ],
-            caption: "One send per worker, N receives by the coordinator — bounded, race-free, no shared slice.",
-          },
-        },
-        {
-          type: "points",
-          items: [
-            "Fan out one goroutine per account; collect all results over a single channel.",
-            "Wrap slow downstream calls in `select { case <-result … case <-time.After(d) … }`.",
-            "Broadcast graceful shutdown by closing one `done` channel every worker selects on.",
-          ],
-        },
-      ],
-    },
-    exercises: {
-      body: "Practice is what turns \"I read about channels\" into \"I reach for the right channel pattern without thinking.\" Work across predicting when a send blocks, reading close and comma-ok behavior, implementing a fan-out, debugging a double-close panic, refactoring a blocking read into a non-blocking select, and designing directional signatures. Each produces a different kind of evidence — do them, don't just read them.",
     },
     mastery: {
       body: "You've mastered this when you can explain why an unbuffered send blocks until a receiver is ready and how buffering changes it, recite the three close rules without notes, predict which select case runs (and when the whole select blocks), and implement a clean fan-out that terminates with a single close. Attest a criterion only when you genuinely have that evidence — opening the lesson doesn't count.",
